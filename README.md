@@ -64,7 +64,7 @@ Permite crear, descubrir y gestionar eventos de manera sencilla, moderna y visua
 
 ## 🧑‍💻 Autor
 
-**Paladynamo & GersebO**
+**Paladynamo & GersebO**</br>
 Desarrolladores Android • Kotlin & Compose Enthusiast  
 💼 [GitHub](https://github.com/Paladynamo) | 💼 [GitHub](https://github.com/GersebO)
 
