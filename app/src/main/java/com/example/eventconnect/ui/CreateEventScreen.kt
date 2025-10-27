@@ -1,4 +1,4 @@
-package com.example.eventconnect
+package com.example.eventconnect.ui
 
 import android.app.DatePickerDialog
 import android.widget.Toast
@@ -11,6 +11,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.eventconnect.data.AppDatabase
 import com.example.eventconnect.data.Event
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -25,8 +26,9 @@ fun CreateEventScreen(
     onCancel: () -> Unit
 ) {
     val context = LocalContext.current
-    val db = remember { AppDatabase.getInstance(context) } // ✅ FIX
+    val db = remember { AppDatabase.getDatabase(context) }   // ✅ usa el método correcto
     val eventDao = db.eventDao()
+    val scope = rememberCoroutineScope()
 
     var title by remember { mutableStateOf("") }
     var description by remember { mutableStateOf("") }
@@ -35,7 +37,6 @@ fun CreateEventScreen(
     var capacity by remember { mutableStateOf("") }
 
     val calendar = Calendar.getInstance()
-
     val datePickerDialog = DatePickerDialog(
         context,
         { _, year, month, day -> date = "$day/${month + 1}/$year" },
@@ -76,17 +77,16 @@ fun CreateEventScreen(
                 if (title.isBlank() || description.isBlank() || category.isBlank() || date.isBlank()) {
                     Toast.makeText(context, "Completa todos los campos obligatorios", Toast.LENGTH_SHORT).show()
                 } else {
-                    CoroutineScope(Dispatchers.IO).launch {
+                    scope.launch(Dispatchers.IO) {
                         val event = Event(
                             title = title,
                             description = description,
                             category = category,
                             date = date,
-                            store = storeName,
-                            capacity = capacity.ifBlank { "N/A" }
+                            store = storeName
                         )
                         eventDao.insertEvent(event)
-                        CoroutineScope(Dispatchers.Main).launch {
+                        launch(Dispatchers.Main) {
                             Toast.makeText(context, "Evento publicado correctamente", Toast.LENGTH_SHORT).show()
                             onEventCreated()
                         }

@@ -2,13 +2,29 @@ package com.example.eventconnect.data
 
 import androidx.room.Dao
 import androidx.room.Insert
+import androidx.room.OnConflictStrategy
 import androidx.room.Query
 
 @Dao
 interface UserDao {
-    @Insert
+
+    // ✅ Inserta un usuario nuevo
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertUser(user: User)
 
+    // ✅ Verifica credenciales de inicio de sesión
     @Query("SELECT * FROM users WHERE email = :email AND password = :password LIMIT 1")
-    suspend fun getUser(email: String, password: String): User?
+    suspend fun getUserByEmailAndPassword(email: String, password: String): User?
+
+    // ✅ Verifica si el correo ya está registrado
+    @Query("SELECT * FROM users WHERE email = :email LIMIT 1")
+    suspend fun getUserByEmail(email: String): User?
+
+    // ✅ Obtiene un usuario específico por ID
+    @Query("SELECT * FROM users WHERE id = :id LIMIT 1")
+    suspend fun getUserById(id: Int): User?
+
+    // ✅ Devuelve todos los usuarios (solo para pruebas o debug)
+    @Query("SELECT * FROM users ORDER BY id ASC")
+    suspend fun getAllUsers(): List<User>
 }

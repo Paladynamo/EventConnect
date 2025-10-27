@@ -1,8 +1,6 @@
 package com.example.eventconnect.data
 
-import androidx.room.Dao
-import androidx.room.Insert
-import androidx.room.Query
+import androidx.room.*
 
 @Dao
 interface EventDao {
@@ -11,4 +9,13 @@ interface EventDao {
 
     @Query("SELECT * FROM events")
     suspend fun getAllEvents(): List<Event>
+
+    @Query("SELECT * FROM events WHERE id = :id LIMIT 1")
+    suspend fun getEventById(id: Int): Event?
+
+    @Update
+    suspend fun updateEvent(event: Event)
+
+    @Delete
+    suspend fun deleteEvent(event: Event)
 }

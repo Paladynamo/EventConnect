@@ -1,17 +1,13 @@
-package com.example.eventconnect
+package com.example.eventconnect.data
 
+import android.content.Context
 import androidx.room.Database
 import androidx.room.Room
 import androidx.room.RoomDatabase
-import android.content.Context
-import com.example.eventconnect.data.User
-import com.example.eventconnect.data.UserDao
-import com.example.eventconnect.data.Event
-import com.example.eventconnect.data.EventDao
 
-// 🔹 Subimos la versión a 2 porque agregamos un nuevo campo a la entidad Event
 @Database(entities = [User::class, Event::class], version = 2, exportSchema = false)
 abstract class AppDatabase : RoomDatabase() {
+
     abstract fun userDao(): UserDao
     abstract fun eventDao(): EventDao
 
@@ -19,18 +15,17 @@ abstract class AppDatabase : RoomDatabase() {
         @Volatile
         private var INSTANCE: AppDatabase? = null
 
-        fun getInstance(context: Context): AppDatabase {
+        //  Usamos un nombre estándar y estable para inicializar la base de datos
+        fun getDatabase(context: Context): AppDatabase {
             return INSTANCE ?: synchronized(this) {
                 val instance = Room.databaseBuilder(
                     context.applicationContext,
                     AppDatabase::class.java,
                     "eventconnect_db"
                 )
-                    // ⚠️ IMPORTANTE: Destruye la DB vieja si hay incompatibilidad de esquema
-                    // Esto evita crashes si cambian las entidades (solo para desarrollo)
+                    // ⚠️ Solo en desarrollo: elimina la DB si hay cambios en entidades
                     .fallbackToDestructiveMigration()
                     .build()
-
                 INSTANCE = instance
                 instance
             }

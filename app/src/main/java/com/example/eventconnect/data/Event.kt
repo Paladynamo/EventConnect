@@ -5,11 +5,11 @@ import androidx.room.PrimaryKey
 
 @Entity(tableName = "events")
 data class Event(
-    @PrimaryKey(autoGenerate = true) val id: Int = 0,
+    @PrimaryKey(autoGenerate = true)
+    val id: Int = 0,
     val title: String,
     val description: String,
-    val category: String,
+    val category: String, // ✅ Asegurado como String (no Char)
     val date: String,
-    val store: String,
-    val capacity: String // 👈 nuevo campo agregado
+    val store: String
 )
