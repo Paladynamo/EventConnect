@@ -11,5 +11,9 @@ data class Event(
     val description: String,
     val category: String, // ✅ Asegurado como String (no Char)
     val date: String,
-    val store: String
+    val store: String,
+    val imageUri: String? = null,
+    val hasCapacity: Boolean = false,
+    val capacityTotal: Int? = null,
+    val capacityAvailable: Int? = null
 )
