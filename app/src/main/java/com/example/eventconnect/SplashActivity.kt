@@ -14,6 +14,7 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.dp
 import androidx.compose.runtime.LaunchedEffect
+import com.example.eventconnect.ui.AppBackground
 import com.example.eventconnect.ui.theme.EventConnectTheme
 import kotlinx.coroutines.delay
 
@@ -22,19 +23,13 @@ class SplashActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         setContent {
             EventConnectTheme {
-                Box(modifier = Modifier.fillMaxSize()) {
-                    Image(
-                        painter = painterResource(id = R.drawable.fondos_screens),
-                        contentDescription = null,
-                        modifier = Modifier.fillMaxSize(),
-                        contentScale = ContentScale.Crop,
-                        alpha = 0.15f
-                    )
+                AppBackground {
                     Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                         Image(
                             painter = painterResource(id = R.drawable.logo_eventconnect),
                             contentDescription = "Logo EventConnect",
-                            modifier = Modifier.size(220.dp)
+                            modifier = Modifier.size(220.dp),
+                            contentScale = ContentScale.Fit
                         )
                     }
                 }

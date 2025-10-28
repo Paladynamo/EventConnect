@@ -30,73 +30,93 @@ fun EventDetailScreen(
     val scope = rememberCoroutineScope()
 
     var event by remember { mutableStateOf<Event?>(null) }
+    var myLastReservation by remember { mutableStateOf<Reservation?>(null) }
 
-    LaunchedEffect(eventId) {
+    val prefs = context.getSharedPreferences("user_session", android.content.Context.MODE_PRIVATE)
+    val userName = prefs.getString("name", "Usuario") ?: "Usuario"
+    val userEmail = prefs.getString("email", "") ?: ""
+
+    LaunchedEffect(eventId, userEmail) {
         event = withContext(Dispatchers.IO) { eventDao.getEventById(eventId) }
+        myLastReservation = withContext(Dispatchers.IO) { reservationDao.getLatestForEventAndUser(eventId, userEmail) }
     }
 
-    event?.let { e ->
-        val scrollState = rememberScrollState()
-        Column(
-            Modifier
-                .fillMaxSize()
-                .imePadding()
-                .verticalScroll(scrollState)
-                .padding(16.dp)
-        ) {
-            AsyncImage(model = e.imageUri, contentDescription = "Imagen del evento", modifier = Modifier
-                .fillMaxWidth()
-                .height(180.dp))
-            Spacer(Modifier.height(12.dp))
-            Text(e.title, style = MaterialTheme.typography.headlineSmall)
-            Text("Categoría: ${e.category}")
-            Text("Fecha: ${e.date}")
-            Text("Organiza: ${e.store}")
-            Spacer(Modifier.height(12.dp))
-            Text(e.description)
-            Spacer(Modifier.height(16.dp))
+    AppBackground {
+        event?.let { e ->
+            val scrollState = rememberScrollState()
+            val available = e.capacityAvailable ?: 0
+            val hasPending = myLastReservation?.status == "PENDING"
+            val isApproved = myLastReservation?.status == "APPROVED"
 
-            if (e.hasCapacity) {
-                val available = e.capacityAvailable ?: 0
-                Text("Cupos disponibles: $available")
-                Spacer(Modifier.height(8.dp))
-                Button(onClick = {
-                    if (available <= 0) {
-                        Toast.makeText(context, "No quedan cupos disponibles", Toast.LENGTH_LONG).show()
-                        return@Button
+            Column(
+                Modifier
+                    .fillMaxSize()
+                    .imePadding()
+                    .verticalScroll(scrollState)
+                    .padding(16.dp)
+            ) {
+                AsyncImage(model = e.imageUri, contentDescription = "Imagen del evento", modifier = Modifier
+                    .fillMaxWidth()
+                    .height(180.dp))
+                Spacer(Modifier.height(12.dp))
+                Text(e.title, style = MaterialTheme.typography.headlineSmall)
+                Text("Categoría: ${e.category}")
+                Text("Fecha: ${e.date}")
+                Text("Organiza: ${e.store}")
+                if (e.region.isNotBlank()) Text("Región: ${e.region}")
+                if (e.comuna.isNotBlank()) Text("Comuna: ${e.comuna}")
+                val address = listOf(e.addressStreet, e.addressNumber).filter { it.isNotBlank() }.joinToString(" ")
+                if (address.isNotBlank()) Text("Dirección: $address")
+                Spacer(Modifier.height(12.dp))
+                Text(e.description)
+                Spacer(Modifier.height(16.dp))
+
+                if (e.hasCapacity) {
+                    Text("Cupos disponibles: $available")
+                    Spacer(Modifier.height(8.dp))
+                    val canRequest = available > 0 && !hasPending && !isApproved
+                    val buttonLabel = when {
+                        isApproved -> "Reserva aprobada"
+                        hasPending -> "Solicitud en revisión"
+                        available <= 0 -> "Sin cupos"
+                        else -> "Solicitar cupo"
                     }
-                    val prefs = context.getSharedPreferences("user_session", android.content.Context.MODE_PRIVATE)
-                    val userName = prefs.getString("name", "Usuario") ?: "Usuario"
-                    val userEmail = prefs.getString("email", "") ?: ""
-
-                    scope.launch {
-                        withContext(Dispatchers.IO) {
-                            reservationDao.insert(
-                                Reservation(
-                                    eventId = e.id,
-                                    userEmail = userEmail,
-                                    userName = userName,
-                                    status = "PENDING"
-                                )
-                            )
+                    Button(onClick = {
+                        val nowAvailable = (event?.capacityAvailable ?: 0)
+                        if (nowAvailable <= 0) {
+                            Toast.makeText(context, "No quedan cupos disponibles", Toast.LENGTH_LONG).show()
+                            return@Button
                         }
-                        NotificationHelper.showReservationNotification(
-                            context = context,
-                            organizerName = e.store,
-                            eventTitle = e.title,
-                            reserverName = userName
-                        )
-                        Toast.makeText(context, "Solicitud enviada a la tienda", Toast.LENGTH_LONG).show()
-                    }
-                }) { Text("Solicitar cupo") }
-            }
+                        scope.launch {
+                            withContext(Dispatchers.IO) {
+                                reservationDao.insert(
+                                    Reservation(
+                                        eventId = e.id,
+                                        userEmail = userEmail,
+                                        userName = userName,
+                                        status = "PENDING"
+                                    )
+                                )
+                            }
+                            NotificationHelper.showReservationNotification(
+                                context = context,
+                                organizerName = e.store,
+                                eventTitle = e.title,
+                                reserverName = userName
+                            )
+                            Toast.makeText(context, "Solicitud enviada a la tienda", Toast.LENGTH_LONG).show()
+                            myLastReservation = Reservation(eventId = e.id, userEmail = userEmail, userName = userName, status = "PENDING")
+                        }
+                    }, enabled = canRequest) { Text(buttonLabel) }
+                }
 
-            Spacer(Modifier.height(8.dp))
-            TextButton(onClick = onBack) { Text("Volver") }
-        }
-    } ?: run {
-        Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-            CircularProgressIndicator()
+                Spacer(Modifier.height(8.dp))
+                TextButton(onClick = onBack) { Text("Volver") }
+            }
+        } ?: run {
+            Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                CircularProgressIndicator()
+            }
         }
     }
 }

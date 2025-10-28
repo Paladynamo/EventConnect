@@ -86,4 +86,8 @@ dependencies {
     implementation("io.coil-kt:coil-gif:2.4.0")
     implementation("com.google.android.gms:play-services-location:21.0.1")
     implementation("androidx.compose.material:material-icons-extended")
+
+    // Añadir dependencias necesarias para resolver errores
+    implementation("androidx.compose.foundation:foundation:1.5.0")
+    implementation("androidx.compose.ui:ui-tooling-preview:1.5.0")
 }

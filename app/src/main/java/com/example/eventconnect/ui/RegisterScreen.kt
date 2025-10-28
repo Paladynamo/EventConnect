@@ -51,155 +51,153 @@ fun RegisterScreen(
 
     val scrollState = rememberScrollState()
 
-    Box(
-        modifier = Modifier
-            .fillMaxSize()
-            .imePadding()
-    ) {
-        Image(
-            painter = painterResource(id = R.drawable.fondos_screens),
-            contentDescription = null,
-            modifier = Modifier.fillMaxSize(),
-            contentScale = ContentScale.Crop,
-            alpha = 0.15f
-        )
-
-        when (step) {
-            RegisterStep.ChooseType -> {
-                Card(modifier = Modifier.padding(24.dp)) {
-                    Column(
-                        modifier = Modifier.padding(24.dp).verticalScroll(scrollState),
-                        horizontalAlignment = Alignment.CenterHorizontally
-                    ) {
-                        Text("¿Qué tipo de cuenta deseas crear?", style = MaterialTheme.typography.headlineSmall)
-                        Spacer(Modifier.height(16.dp))
-                        Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                            Button(onClick = {
-                                userType = "Usuario"
-                                step = RegisterStep.Form
-                            }) { Text("Usuario") }
-                            Button(onClick = {
-                                userType = "Tienda"
-                                step = RegisterStep.Form
-                            }) { Text("Tienda / Productora") }
+    AppBackground {
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .imePadding()
+        ) {
+            when (step) {
+                RegisterStep.ChooseType -> {
+                    Card(modifier = Modifier.padding(24.dp)) {
+                        Column(
+                            modifier = Modifier.padding(24.dp).verticalScroll(scrollState),
+                            horizontalAlignment = Alignment.CenterHorizontally
+                        ) {
+                            Text("¿Qué tipo de cuenta deseas crear?", style = MaterialTheme.typography.headlineSmall)
+                            Spacer(Modifier.height(16.dp))
+                            Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                                Button(onClick = {
+                                    userType = "Usuario"
+                                    step = RegisterStep.Form
+                                }) { Text("Usuario") }
+                                Button(onClick = {
+                                    userType = "Tienda"
+                                    step = RegisterStep.Form
+                                }) { Text("Tienda / Productora") }
+                            }
+                            Spacer(Modifier.height(16.dp))
+                            TextButton(onClick = onBackToLogin) { Text("Volver al inicio de sesión") }
                         }
-                        Spacer(Modifier.height(16.dp))
-                        TextButton(onClick = onBackToLogin) { Text("Volver al inicio de sesión") }
                     }
                 }
-            }
-            RegisterStep.Form -> {
-                Column(
-                    modifier = Modifier
-                        .padding(24.dp)
-                        .background(MaterialTheme.colorScheme.background, MaterialTheme.shapes.medium)
-                        .padding(24.dp)
-                        .verticalScroll(scrollState)
-                ) {
-                    Text(
-                        if (userType == "Tienda") "Crear cuenta de tienda/productora" else "Crear cuenta",
-                        style = MaterialTheme.typography.headlineSmall
-                    )
-                    Spacer(modifier = Modifier.height(16.dp))
+                RegisterStep.Form -> {
+                    Column(
+                        modifier = Modifier
+                            .padding(24.dp)
+                            .background(MaterialTheme.colorScheme.background, MaterialTheme.shapes.medium)
+                            .padding(24.dp)
+                            .verticalScroll(scrollState)
+                    ) {
+                        Text(
+                            if (userType == "Tienda") "Crear cuenta de tienda/productora" else "Crear cuenta",
+                            style = MaterialTheme.typography.headlineSmall
+                        )
+                        Spacer(modifier = Modifier.height(16.dp))
 
-                    OutlinedTextField(value = name, onValueChange = { name = it }, label = { Text("Nombre") }, modifier = Modifier.fillMaxWidth())
-                    Spacer(modifier = Modifier.height(8.dp))
-                    OutlinedTextField(value = email, onValueChange = { email = it }, label = { Text("Correo electrónico") }, modifier = Modifier.fillMaxWidth())
-                    Spacer(modifier = Modifier.height(8.dp))
-                    OutlinedTextField(
-                        value = password,
-                        onValueChange = { password = it },
-                        label = { Text("Contraseña") },
-                        visualTransformation = if (passwordVisible) VisualTransformation.None else PasswordVisualTransformation(),
-                        trailingIcon = {
-                            IconButton(onClick = { passwordVisible = !passwordVisible }) {
-                                Icon(
-                                    imageVector = if (passwordVisible) Icons.Filled.VisibilityOff else Icons.Filled.Visibility,
-                                    contentDescription = if (passwordVisible) "Ocultar contraseña" else "Mostrar contraseña"
-                                )
-                            }
-                        },
-                        modifier = Modifier.fillMaxWidth()
-                    )
-
-                    if (userType == "Tienda") {
+                        OutlinedTextField(value = name, onValueChange = { name = it }, label = { Text("Nombre") }, modifier = Modifier.fillMaxWidth())
+                        Spacer(modifier = Modifier.height(8.dp))
+                        OutlinedTextField(value = email, onValueChange = { email = it }, label = { Text("Correo electrónico") }, modifier = Modifier.fillMaxWidth())
                         Spacer(modifier = Modifier.height(8.dp))
                         OutlinedTextField(
-                            value = storeName,
-                            onValueChange = { storeName = it },
-                            label = { Text("Nombre de tienda o productora") },
+                            value = password,
+                            onValueChange = { password = it },
+                            label = { Text("Contraseña") },
+                            visualTransformation = if (passwordVisible) VisualTransformation.None else PasswordVisualTransformation(),
+                            trailingIcon = {
+                                IconButton(onClick = { passwordVisible = !passwordVisible }) {
+                                    Icon(
+                                        imageVector = if (passwordVisible) Icons.Filled.VisibilityOff else Icons.Filled.Visibility,
+                                        contentDescription = if (passwordVisible) "Ocultar contraseña" else "Mostrar contraseña"
+                                    )
+                                }
+                            },
                             modifier = Modifier.fillMaxWidth()
                         )
-                    }
 
-                    Spacer(modifier = Modifier.height(16.dp))
-                    Button(
-                        onClick = {
-                            // Validaciones
-                            if (name.isBlank() || email.isBlank() || password.isBlank()) {
-                                Toast.makeText(context, "Completa todos los campos", Toast.LENGTH_LONG).show()
-                                return@Button
-                            }
-                            if (userType == "Tienda" && storeName.isBlank()) {
-                                Toast.makeText(context, "Ingresa el nombre de la tienda/productora", Toast.LENGTH_LONG).show()
-                                return@Button
-                            }
-                            scope.launch {
-                                isSubmitting = true
-                                try {
-                                    val exists = withContext(Dispatchers.IO) { userDao.getUserByEmail(email) }
-                                    if (exists != null) {
-                                        showEmailExistsDialog = true
-                                    } else {
-                                        withContext(Dispatchers.IO) {
-                                            userDao.insertUser(
-                                                User(
-                                                    name = name,
-                                                    email = email,
-                                                    password = password,
-                                                    userType = userType,
-                                                    storeName = if (userType == "Tienda") storeName else ""
-                                                )
-                                            )
-                                        }
-                                        Toast.makeText(context, "Registro exitoso", Toast.LENGTH_LONG).show()
-                                        onBackToLogin()
-                                    }
-                                } catch (e: Exception) {
-                                    Toast.makeText(context, "Error al registrar: ${e.message}", Toast.LENGTH_LONG).show()
-                                } finally {
-                                    isSubmitting = false
-                                }
-                            }
-                        },
-                        enabled = !isSubmitting,
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        Text(if (isSubmitting) "Registrando..." else "Registrarse")
-                    }
-
-                    Spacer(modifier = Modifier.height(8.dp))
-                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                        TextButton(onClick = { step = RegisterStep.ChooseType }, enabled = !isSubmitting) {
-                            Text("Cambiar tipo")
+                        if (userType == "Tienda") {
+                            Spacer(modifier = Modifier.height(8.dp))
+                            OutlinedTextField(
+                                value = storeName,
+                                onValueChange = { storeName = it },
+                                label = { Text("Nombre de tienda o productora") },
+                                modifier = Modifier.fillMaxWidth()
+                            )
                         }
-                        TextButton(onClick = onBackToLogin, enabled = !isSubmitting) {
-                            Text("Volver al inicio de sesión")
+
+                        Spacer(modifier = Modifier.height(16.dp))
+                        Button(
+                            onClick = {
+                                // Validaciones
+                                if (name.isBlank() || email.isBlank() || password.isBlank()) {
+                                    Toast.makeText(context, "Completa todos los campos", Toast.LENGTH_LONG).show()
+                                    return@Button
+                                }
+                                if (password.length < 6) {
+                                    Toast.makeText(context, "La contraseña debe tener al menos 6 caracteres", Toast.LENGTH_LONG).show()
+                                    return@Button
+                                }
+                                if (userType == "Tienda" && storeName.isBlank()) {
+                                    Toast.makeText(context, "Ingresa el nombre de la tienda/productora", Toast.LENGTH_LONG).show()
+                                    return@Button
+                                }
+                                scope.launch {
+                                    isSubmitting = true
+                                    try {
+                                        val exists = withContext(Dispatchers.IO) { userDao.getUserByEmail(email) }
+                                        if (exists != null) {
+                                            showEmailExistsDialog = true
+                                        } else {
+                                            withContext(Dispatchers.IO) {
+                                                userDao.insertUser(
+                                                    User(
+                                                        name = name,
+                                                        email = email.trim().lowercase(),
+                                                        password = password,
+                                                        userType = userType,
+                                                        storeName = if (userType == "Tienda") storeName else ""
+                                                    )
+                                                )
+                                            }
+                                            Toast.makeText(context, "Registro exitoso", Toast.LENGTH_LONG).show()
+                                            onBackToLogin()
+                                        }
+                                    } catch (e: Exception) {
+                                        Toast.makeText(context, "Error al registrar", Toast.LENGTH_LONG).show()
+                                    } finally {
+                                        isSubmitting = false
+                                    }
+                                }
+                            },
+                            enabled = !isSubmitting,
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Text(if (isSubmitting) "Registrando..." else "Registrarse")
+                        }
+
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                            TextButton(onClick = { step = RegisterStep.ChooseType }, enabled = !isSubmitting) {
+                                Text("Cambiar tipo")
+                            }
+                            TextButton(onClick = onBackToLogin, enabled = !isSubmitting) {
+                                Text("Volver al inicio de sesión")
+                            }
                         }
                     }
                 }
             }
         }
-    }
 
-    if (showEmailExistsDialog) {
-        AlertDialog(
-            onDismissRequest = { showEmailExistsDialog = false },
-            confirmButton = {
-                TextButton(onClick = { showEmailExistsDialog = false }) { Text("Entendido") }
-            },
-            title = { Text("Correo ya registrado") },
-            text = { Text("El correo ingresado ya existe. Intenta iniciar sesión o usa otro correo.") }
-        )
+        if (showEmailExistsDialog) {
+            AlertDialog(
+                onDismissRequest = { showEmailExistsDialog = false },
+                confirmButton = {
+                    TextButton(onClick = { showEmailExistsDialog = false }) { Text("Entendido") }
+                },
+                title = { Text("Correo ya registrado") },
+                text = { Text("El correo ingresado ya existe. Intenta iniciar sesión o usa otro correo.") }
+            )
+        }
     }
 }

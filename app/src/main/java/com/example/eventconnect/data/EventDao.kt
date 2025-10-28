@@ -21,4 +21,14 @@ interface EventDao {
 
     @Delete
     suspend fun deleteEvent(event: Event)
+
+    // Nuevos filtros por ubicación y categoría
+    @Query("SELECT * FROM events WHERE region = :region AND comuna = :comuna ORDER BY id DESC")
+    suspend fun getEventsByComuna(region: String, comuna: String): List<Event>
+
+    @Query("SELECT * FROM events WHERE region = :region AND comuna = :comuna AND category = :category ORDER BY id DESC")
+    suspend fun getEventsByComunaAndCategory(region: String, comuna: String, category: String): List<Event>
+
+    @Query("SELECT DISTINCT category FROM events ORDER BY category ASC")
+    suspend fun getAvailableCategories(): List<String>
 }

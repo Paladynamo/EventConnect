@@ -12,6 +12,12 @@ data class Event(
     val category: String, // ✅ Asegurado como String (no Char)
     val date: String,
     val store: String,
+    // Localización y dirección
+    val region: String = "",
+    val comuna: String = "",
+    val addressStreet: String = "",
+    val addressNumber: String = "",
+    // Imagen y cupos
     val imageUri: String? = null,
     val hasCapacity: Boolean = false,
     val capacityTotal: Int? = null,

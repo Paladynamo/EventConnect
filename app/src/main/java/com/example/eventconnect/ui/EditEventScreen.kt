@@ -15,6 +15,7 @@ import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
 import com.example.eventconnect.data.AppDatabase
 import com.example.eventconnect.data.Event
+import com.example.eventconnect.location.ChileLocations
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -45,6 +46,12 @@ fun EditEventScreen(
     var hasCapacity by remember { mutableStateOf(false) }
     var capacityText by remember { mutableStateOf("") }
 
+    // Ubicación/dirección
+    var region by remember { mutableStateOf("") }
+    var comuna by remember { mutableStateOf("") }
+    var addressStreet by remember { mutableStateOf("") }
+    var addressNumber by remember { mutableStateOf("") }
+
     // Cargar datos del evento al abrir la pantalla
     LaunchedEffect(eventId) {
         val loadedEvent = withContext(Dispatchers.IO) { eventDao.getEventById(eventId) }
@@ -58,6 +65,11 @@ fun EditEventScreen(
             imageUri = it.imageUri
             hasCapacity = it.hasCapacity
             capacityText = it.capacityTotal?.toString() ?: ""
+            // loc/dirección
+            region = it.region
+            comuna = it.comuna
+            addressStreet = it.addressStreet
+            addressNumber = it.addressNumber
         }
     }
 
@@ -100,6 +112,15 @@ fun EditEventScreen(
 
         Spacer(modifier = Modifier.height(16.dp))
 
+        // Ubicación/dirección
+        LocationSelectors(region = region, comuna = comuna, onRegion = { region = it; comuna = "" }, onComuna = { comuna = it })
+        Spacer(Modifier.height(8.dp))
+        OutlinedTextField(value = addressStreet, onValueChange = { addressStreet = it }, label = { Text("Calle / Avenida / Pasaje") })
+        Spacer(Modifier.height(8.dp))
+        OutlinedTextField(value = addressNumber, onValueChange = { addressNumber = it.filter { ch -> ch.isDigit() } }, label = { Text("Número") })
+
+        Spacer(modifier = Modifier.height(16.dp))
+
         // Selector de cupos
         Text("Disponibilidad de cupos")
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -123,6 +144,10 @@ fun EditEventScreen(
                 coroutineScope.launch {
                     if (title.isBlank() || description.isBlank() || category.isBlank() || date.isBlank()) {
                         Toast.makeText(context, "Completa los campos obligatorios", Toast.LENGTH_LONG).show()
+                        return@launch
+                    }
+                    if (region.isBlank() || comuna.isBlank() || addressStreet.isBlank() || addressNumber.isBlank()) {
+                        Toast.makeText(context, "Completa la ubicación y dirección", Toast.LENGTH_LONG).show()
                         return@launch
                     }
                     val total = if (hasCapacity) capacityText.toIntOrNull() else null
@@ -153,7 +178,11 @@ fun EditEventScreen(
                                 imageUri = finalUri,
                                 hasCapacity = hasCapacity,
                                 capacityTotal = total,
-                                capacityAvailable = newAvailable
+                                capacityAvailable = newAvailable,
+                                region = region,
+                                comuna = comuna,
+                                addressStreet = addressStreet,
+                                addressNumber = addressNumber
                             )
                             eventDao.updateEvent(updated)
                         }
@@ -205,6 +234,35 @@ private fun CategoryDropdown(selected: String, options: List<String>, onSelected
             options.forEach { opt ->
                 DropdownMenuItem(text = { Text(opt) }, onClick = { onSelected(opt); expanded = false })
             }
+        }
+    }
+}
+
+@Composable
+private fun LocationSelectors(
+    region: String,
+    comuna: String,
+    onRegion: (String) -> Unit,
+    onComuna: (String) -> Unit
+) {
+    var regionExpanded by remember { mutableStateOf(false) }
+    var comunaExpanded by remember { mutableStateOf(false) }
+    Column(Modifier.fillMaxWidth()) {
+        OutlinedTextField(value = region, onValueChange = {}, enabled = false, label = { Text("Región") }, modifier = Modifier.fillMaxWidth())
+        Spacer(Modifier.height(6.dp))
+        Button(onClick = { regionExpanded = true }) { Text(if (region.isBlank()) "Elegir región" else "Cambiar región") }
+        DropdownMenu(expanded = regionExpanded, onDismissRequest = { regionExpanded = false }) {
+            ChileLocations.regiones.forEach { r ->
+                DropdownMenuItem(text = { Text(r) }, onClick = { onRegion(r); regionExpanded = false })
+            }
+        }
+        Spacer(Modifier.height(8.dp))
+        OutlinedTextField(value = comuna, onValueChange = {}, enabled = false, label = { Text("Comuna") }, modifier = Modifier.fillMaxWidth())
+        Spacer(Modifier.height(6.dp))
+        val comunas = ChileLocations.comunasPorRegion[region] ?: emptyList()
+        Button(onClick = { comunaExpanded = true }, enabled = region.isNotBlank()) { Text(if (comuna.isBlank()) "Elegir comuna" else "Cambiar comuna") }
+        DropdownMenu(expanded = comunaExpanded, onDismissRequest = { comunaExpanded = false }) {
+            comunas.forEach { c -> DropdownMenuItem(text = { Text(c) }, onClick = { onComuna(c); comunaExpanded = false }) }
         }
     }
 }

@@ -18,5 +18,11 @@ interface ReservationDao {
 
     @Update
     suspend fun update(reservation: Reservation)
-}
 
+    // Nuevas utilidades
+    @Query("SELECT * FROM reservations WHERE eventId = :eventId AND userEmail = :email ORDER BY createdAt DESC LIMIT 1")
+    suspend fun getLatestForEventAndUser(eventId: Int, email: String): Reservation?
+
+    @Query("SELECT COUNT(*) FROM reservations WHERE eventId = :eventId AND userEmail = :email AND status = :status")
+    suspend fun countByStatusForEventAndUser(eventId: Int, email: String, status: String): Int
+}
