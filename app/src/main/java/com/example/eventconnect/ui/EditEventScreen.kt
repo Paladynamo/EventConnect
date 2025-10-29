@@ -1,18 +1,34 @@
 package com.example.eventconnect.ui
 
+import android.Manifest
 import android.content.Context
+import android.content.pm.PackageManager
 import android.graphics.Bitmap
+import android.graphics.BitmapFactory
+import android.graphics.Matrix
 import android.net.Uri
 import android.widget.Toast
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.background
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
+import com.example.eventconnect.data.PendingOperation
 import com.example.eventconnect.data.AppDatabase
 import com.example.eventconnect.data.Event
 import com.example.eventconnect.location.ChileLocations
@@ -21,6 +37,14 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.File
 import java.io.FileOutputStream
+import java.io.InputStream
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.foundation.gestures.detectDragGestures
+import androidx.compose.ui.graphics.graphicsLayer
+import kotlin.math.abs
+import java.util.Collections
+import androidx.compose.ui.platform.LocalDensity
+import androidx.core.content.ContextCompat
 
 @Composable
 fun EditEventScreen(
@@ -40,9 +64,22 @@ fun EditEventScreen(
     var category by remember { mutableStateOf("") }
     var date by remember { mutableStateOf("") }
     var store by remember { mutableStateOf("") }
-    var imageUri by remember { mutableStateOf<String?>(null) }
-    var pickedUri by remember { mutableStateOf<Uri?>(null) }
-    var pickedBitmap by remember { mutableStateOf<Bitmap?>(null) }
+
+    var imageUris by remember { mutableStateOf<List<String>>(emptyList()) }
+    // Control de menú de edición
+    var editingMenuFor by remember { mutableStateOf<String?>(null) }
+
+    val galleryPicker = rememberLauncherForActivityResult(ActivityResultContracts.GetMultipleContents()) { uris ->
+        if (uris.isNotEmpty()) imageUris = imageUris + uris.map { it.toString() }
+    }
+    val cameraLauncher = rememberLauncherForActivityResult(ActivityResultContracts.TakePicturePreview()) { bmp ->
+        if (bmp != null) saveBitmapToInternal(context, bmp)?.let { imageUris = imageUris + it }
+    }
+    // Launcher para solicitar permiso de cámara
+    val cameraPermissionLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+        if (granted) cameraLauncher.launch(null) else Toast.makeText(context, "Permiso de cámara requerido para tomar fotos", Toast.LENGTH_SHORT).show()
+    }
+
     var hasCapacity by remember { mutableStateOf(false) }
     var capacityText by remember { mutableStateOf("") }
 
@@ -62,7 +99,7 @@ fun EditEventScreen(
             category = it.category
             date = it.date
             store = it.store
-            imageUri = it.imageUri
+            imageUris = it.imageUris ?: emptyList()
             hasCapacity = it.hasCapacity
             capacityText = it.capacityTotal?.toString() ?: ""
             // loc/dirección
@@ -74,6 +111,34 @@ fun EditEventScreen(
     }
 
     val scrollState = rememberScrollState()
+
+    // Config drag & drop
+    val density = LocalDensity.current
+    val itemSizeDp = 120.dp
+    val spacingDp = 8.dp
+    val itemWidthPx = with(density) { itemSizeDp.roundToPx() }
+    val spacingPx = with(density) { spacingDp.roundToPx() }
+    val offsets = remember { mutableStateMapOf<String, Float>() }
+
+    // Helper para transformar y reemplazar una URI en la lista
+    fun transformAndReplace(oldUriStr: String, op: (Bitmap) -> Bitmap?) {
+        val bmp = loadBitmapFromUri(context, oldUriStr)
+        if (bmp == null) {
+            Toast.makeText(context, "No se pudo cargar la imagen", Toast.LENGTH_SHORT).show()
+            return
+        }
+        val out = op(bmp)
+        if (out == null) {
+            Toast.makeText(context, "No se pudo procesar la imagen", Toast.LENGTH_SHORT).show()
+            return
+        }
+        val newUri = saveBitmapToInternal(context, out)
+        if (newUri == null) {
+            Toast.makeText(context, "No se pudo guardar la imagen", Toast.LENGTH_SHORT).show()
+            return
+        }
+        imageUris = imageUris.map { if (it == oldUriStr) newUri else it }
+    }
 
     Column(
         modifier = Modifier
@@ -100,14 +165,103 @@ fun EditEventScreen(
         OutlinedTextField(value = store, onValueChange = { store = it }, label = { Text("Tienda / Organizador") })
 
         Spacer(modifier = Modifier.height(12.dp))
-        ImagePicker(
-            onImagePicked = { uri -> pickedUri = uri; pickedBitmap = null },
-            onBitmapPicked = { bmp -> pickedBitmap = bmp; pickedUri = null }
-        )
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            OutlinedButton(onClick = { galleryPicker.launch("image/*") }) { Text("Agregar desde galería") }
+            OutlinedButton(onClick = {
+                val granted = ContextCompat.checkSelfPermission(context, Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED
+                if (granted) {
+                    cameraLauncher.launch(null)
+                } else {
+                    cameraPermissionLauncher.launch(Manifest.permission.CAMERA)
+                }
+            }) { Text("Tomar foto") }
+        }
         Spacer(Modifier.height(8.dp))
-        val previewModel: Any? = pickedUri ?: pickedBitmap ?: imageUri
-        if (previewModel != null) {
-            AsyncImage(model = previewModel, contentDescription = "Imagen del evento", modifier = Modifier.size(160.dp))
+        if (imageUris.isNotEmpty()) {
+            Row(Modifier.horizontalScroll(rememberScrollState())) {
+                imageUris.forEach { u ->
+                    val tx = offsets[u] ?: 0f
+                    Box(
+                        Modifier
+                            .size(itemSizeDp)
+                            .padding(end = spacingDp)
+                            .graphicsLayer { translationX = tx }
+                            .pointerInput(u) {
+                                detectDragGestures(
+                                    onDragStart = { offsets[u] = 0f },
+                                    onDrag = { change, drag ->
+                                        change.consume()
+                                        val cur = (offsets[u] ?: 0f) + drag.x
+                                        offsets[u] = cur
+                                        val threshold = (itemWidthPx + spacingPx) / 2f
+                                        if (abs(cur) > threshold) {
+                                            val from = imageUris.indexOf(u)
+                                            val dir = if (cur > 0f) 1 else -1
+                                            val to = (from + dir).coerceIn(0, imageUris.lastIndex)
+                                            if (to != from) {
+                                                val list = imageUris.toMutableList()
+                                                Collections.swap(list, from, to)
+                                                imageUris = list
+                                            }
+                                            offsets[u] = 0f
+                                        }
+                                    },
+                                    onDragEnd = { offsets[u] = 0f },
+                                    onDragCancel = { offsets[u] = 0f }
+                                )
+                            }
+                    ) {
+                        AsyncImage(model = u, contentDescription = "Imagen del evento", modifier = Modifier.matchParentSize())
+                        // Botón Editar (menú con acciones)
+                        Box(modifier = Modifier.align(Alignment.TopStart)) {
+                            IconButton(
+                                onClick = { editingMenuFor = u },
+                                modifier = Modifier
+                                    .size(24.dp)
+                                    .clip(CircleShape)
+                                    .background(Color.Black.copy(alpha = 0.6f))
+                            ) {
+                                Icon(Icons.Filled.Edit, contentDescription = "Editar", tint = Color.White)
+                            }
+                            DropdownMenu(
+                                expanded = editingMenuFor == u,
+                                onDismissRequest = { editingMenuFor = null }
+                            ) {
+                                DropdownMenuItem(text = { Text("Rotar 90°") }, onClick = {
+                                    editingMenuFor = null
+                                    transformAndReplace(u) { rotateBitmap(it, 90f) }
+                                })
+                                DropdownMenuItem(text = { Text("Rotar -90°") }, onClick = {
+                                    editingMenuFor = null
+                                    transformAndReplace(u) { rotateBitmap(it, -90f) }
+                                })
+                                DropdownMenuItem(text = { Text("Voltear H") }, onClick = {
+                                    editingMenuFor = null
+                                    transformAndReplace(u) { flipBitmap(it, horizontal = true) }
+                                })
+                                DropdownMenuItem(text = { Text("Voltear V") }, onClick = {
+                                    editingMenuFor = null
+                                    transformAndReplace(u) { flipBitmap(it, horizontal = false) }
+                                })
+                                DropdownMenuItem(text = { Text("Recorte 1:1 (centro)") }, onClick = {
+                                    editingMenuFor = null
+                                    transformAndReplace(u) { centerCropSquare(it) }
+                                })
+                            }
+                        }
+                        IconButton(
+                            onClick = { imageUris = imageUris.filterNot { it == u } },
+                            modifier = Modifier
+                                .align(Alignment.TopEnd)
+                                .size(24.dp)
+                                .clip(CircleShape)
+                                .background(Color.Black.copy(alpha = 0.6f))
+                        ) {
+                            Icon(Icons.Filled.Close, contentDescription = "Quitar", tint = Color.White)
+                        }
+                    }
+                }
+            }
         }
 
         Spacer(modifier = Modifier.height(16.dp))
@@ -155,27 +309,20 @@ fun EditEventScreen(
                         Toast.makeText(context, "Ingresa una cantidad de cupos válida (> 0)", Toast.LENGTH_LONG).show()
                         return@launch
                     }
-                    val finalUri = withContext(Dispatchers.IO) {
-                        when {
-                            pickedUri != null -> pickedUri.toString()
-                            pickedBitmap != null -> saveBitmapToInternal(context, pickedBitmap!!)
-                            else -> imageUri
-                        }
-                    }
                     withContext(Dispatchers.IO) {
-                        event?.let {
+                        event?.let { e ->
                             val newAvailable = when {
                                 !hasCapacity -> null
-                                it.capacityAvailable != null && total != null -> minOf(it.capacityAvailable, total)
+                                e.capacityAvailable != null && total != null -> minOf(e.capacityAvailable, total)
                                 else -> total
                             }
-                            val updated = it.copy(
+                            val updated = e.copy(
                                 title = title,
                                 description = description,
                                 category = category,
                                 date = date,
                                 store = store,
-                                imageUri = finalUri,
+                                imageUris = imageUris,
                                 hasCapacity = hasCapacity,
                                 capacityTotal = total,
                                 capacityAvailable = newAvailable,
@@ -185,6 +332,15 @@ fun EditEventScreen(
                                 addressNumber = addressNumber
                             )
                             eventDao.updateEvent(updated)
+                            // Encola para sincronizar
+                            val payload = "{" +
+                                "\"id\":${e.id}," +
+                                "\"title\":\"$title\"," +
+                                "\"category\":\"$category\"" +
+                                "}"
+                            AppDatabase.getDatabase(context).pendingOperationDao().insert(
+                                PendingOperation(type = "EVENT_UPDATE", payload = payload)
+                            )
                         }
                     }
                     Toast.makeText(context, "Evento actualizado correctamente", Toast.LENGTH_LONG).show()
@@ -203,7 +359,14 @@ fun EditEventScreen(
             onClick = {
                 coroutineScope.launch {
                     withContext(Dispatchers.IO) {
-                        event?.let { eventDao.deleteEvent(it) }
+                        event?.let { e ->
+                            eventDao.deleteEvent(e)
+                            // Encola delete para sincronizar
+                            val payload = "{" + "\"id\":${e.id}" + "}"
+                            AppDatabase.getDatabase(context).pendingOperationDao().insert(
+                                PendingOperation(type = "EVENT_DELETE", payload = payload)
+                            )
+                        }
                     }
                     Toast.makeText(context, "Evento eliminado", Toast.LENGTH_LONG).show()
                     onBack()
@@ -265,6 +428,41 @@ private fun LocationSelectors(
             comunas.forEach { c -> DropdownMenuItem(text = { Text(c) }, onClick = { onComuna(c); comunaExpanded = false }) }
         }
     }
+}
+
+private fun loadBitmapFromUri(context: Context, uriStr: String): Bitmap? {
+    return try {
+        val uri = Uri.parse(uriStr)
+        val stream: InputStream? = context.contentResolver.openInputStream(uri)
+        stream.use { BitmapFactory.decodeStream(it) }
+    } catch (_: Exception) {
+        null
+    }
+}
+
+private fun rotateBitmap(bmp: Bitmap, degrees: Float): Bitmap? {
+    return try {
+        val m = Matrix().apply { postRotate(degrees) }
+        Bitmap.createBitmap(bmp, 0, 0, bmp.width, bmp.height, m, true)
+    } catch (_: Exception) { null }
+}
+
+private fun flipBitmap(bmp: Bitmap, horizontal: Boolean): Bitmap? {
+    return try {
+        val sx = if (horizontal) -1f else 1f
+        val sy = if (horizontal) 1f else -1f
+        val m = Matrix().apply { postScale(sx, sy, bmp.width / 2f, bmp.height / 2f) }
+        Bitmap.createBitmap(bmp, 0, 0, bmp.width, bmp.height, m, true)
+    } catch (_: Exception) { null }
+}
+
+private fun centerCropSquare(bmp: Bitmap): Bitmap? {
+    val size = minOf(bmp.width, bmp.height)
+    val x = (bmp.width - size) / 2
+    val y = (bmp.height - size) / 2
+    return try {
+        Bitmap.createBitmap(bmp, x, y, size, size)
+    } catch (_: Exception) { null }
 }
 
 private fun saveBitmapToInternal(context: Context, bmp: Bitmap): String? {

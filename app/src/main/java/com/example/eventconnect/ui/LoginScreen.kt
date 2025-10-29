@@ -17,6 +17,8 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
@@ -25,6 +27,7 @@ import com.example.eventconnect.R
 import com.example.eventconnect.data.AppDatabase
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import androidx.core.content.edit
 
 @Composable
 fun LoginScreen(navController: NavController) {
@@ -58,7 +61,7 @@ fun LoginScreen(navController: NavController) {
                     contentDescription = null,
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(120.dp),
+                        .height(160.dp),
                     contentScale = ContentScale.Fit
                 )
                 Spacer(modifier = Modifier.height(16.dp))
@@ -66,11 +69,11 @@ fun LoginScreen(navController: NavController) {
                 Text("Iniciar Sesión", style = MaterialTheme.typography.headlineSmall)
                 Spacer(modifier = Modifier.height(16.dp))
 
-                OutlinedTextField(value = email, onValueChange = { email = it }, label = { Text("Correo") }, modifier = Modifier.fillMaxWidth())
+                OutlinedTextField(value = email, onValueChange = { email = it.replace("\n", "") }, label = { Text("Correo") }, modifier = Modifier.fillMaxWidth(), singleLine = true, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email))
                 Spacer(modifier = Modifier.height(8.dp))
                 OutlinedTextField(
                     value = password,
-                    onValueChange = { password = it },
+                    onValueChange = { password = it.replace("\n", "") },
                     label = { Text("Contraseña") },
                     visualTransformation = if (passwordVisible) VisualTransformation.None else PasswordVisualTransformation(),
                     trailingIcon = {
@@ -81,7 +84,9 @@ fun LoginScreen(navController: NavController) {
                             )
                         }
                     },
-                    modifier = Modifier.fillMaxWidth()
+                    modifier = Modifier.fillMaxWidth(),
+                    singleLine = true,
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password)
                 )
 
                 Spacer(modifier = Modifier.height(16.dp))
@@ -104,12 +109,12 @@ fun LoginScreen(navController: NavController) {
                                 delay(200)
                                 if (user != null) {
                                     val sharedPref = context.getSharedPreferences("user_session", android.content.Context.MODE_PRIVATE)
-                                    sharedPref.edit()
-                                        .putString("email", user.email)
-                                        .putString("name", user.name)
-                                        .putString("type", user.userType)
-                                        .putString("storeName", user.storeName ?: "")
-                                        .apply()
+                                    sharedPref.edit {
+                                        putString("email", user.email)
+                                        putString("name", user.name)
+                                        putString("type", user.userType)
+                                        putString("storeName", user.storeName ?: "")
+                                    }
 
                                     Toast.makeText(context, "¡Bienvenido, ${user.name}!", Toast.LENGTH_LONG).show()
                                     navController.navigate("home") {

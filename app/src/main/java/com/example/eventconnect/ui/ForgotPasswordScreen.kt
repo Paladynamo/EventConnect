@@ -22,6 +22,8 @@ import kotlinx.coroutines.withContext
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material.icons.filled.VisibilityOff
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.ui.text.input.KeyboardType
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -67,7 +69,7 @@ fun ForgotPasswordScreen(onBack: () -> Unit) {
 
                 OutlinedTextField(
                     value = email,
-                    onValueChange = { email = it.trim() },
+                    onValueChange = { email = it.trim().replace("\n", "") },
                     label = { Text("Correo registrado") },
                     isError = email.isNotEmpty() && !Patterns.EMAIL_ADDRESS.matcher(email).matches(),
                     supportingText = {
@@ -75,12 +77,14 @@ fun ForgotPasswordScreen(onBack: () -> Unit) {
                             Text("Correo inválido")
                         }
                     },
-                    modifier = Modifier.fillMaxWidth()
+                    modifier = Modifier.fillMaxWidth(),
+                    singleLine = true,
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email)
                 )
                 Spacer(Modifier.height(8.dp))
                 OutlinedTextField(
                     value = newPassword,
-                    onValueChange = { newPassword = it },
+                    onValueChange = { newPassword = it.replace("\n", "") },
                     label = { Text("Nueva contraseña") },
                     trailingIcon = {
                         IconButton(onClick = { showNewPass = !showNewPass }) {
@@ -92,12 +96,14 @@ fun ForgotPasswordScreen(onBack: () -> Unit) {
                     supportingText = {
                         if (newPassword.isNotEmpty() && newPassword.length < 6) Text("Mínimo 6 caracteres")
                     },
-                    modifier = Modifier.fillMaxWidth()
+                    modifier = Modifier.fillMaxWidth(),
+                    singleLine = true,
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password)
                 )
                 Spacer(Modifier.height(8.dp))
                 OutlinedTextField(
                     value = confirmPassword,
-                    onValueChange = { confirmPassword = it },
+                    onValueChange = { confirmPassword = it.replace("\n", "") },
                     label = { Text("Confirmar contraseña") },
                     trailingIcon = {
                         IconButton(onClick = { showConfirmPass = !showConfirmPass }) {
@@ -110,7 +116,9 @@ fun ForgotPasswordScreen(onBack: () -> Unit) {
                     supportingText = {
                         if (confirmPassword.isNotEmpty() && confirmPassword != newPassword) Text("No coincide con la nueva contraseña")
                     },
-                    modifier = Modifier.fillMaxWidth()
+                    modifier = Modifier.fillMaxWidth(),
+                    singleLine = true,
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password)
                 )
                 Spacer(Modifier.height(16.dp))
 

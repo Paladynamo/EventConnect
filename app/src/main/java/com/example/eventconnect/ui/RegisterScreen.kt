@@ -25,6 +25,8 @@ import com.example.eventconnect.data.User
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.ui.text.input.KeyboardType
 
 private enum class RegisterStep { ChooseType, Form }
 
@@ -95,13 +97,13 @@ fun RegisterScreen(
                         )
                         Spacer(modifier = Modifier.height(16.dp))
 
-                        OutlinedTextField(value = name, onValueChange = { name = it }, label = { Text("Nombre") }, modifier = Modifier.fillMaxWidth())
+                        OutlinedTextField(value = name, onValueChange = { name = it.replace("\n", "") }, label = { Text("Nombre") }, modifier = Modifier.fillMaxWidth(), singleLine = true)
                         Spacer(modifier = Modifier.height(8.dp))
-                        OutlinedTextField(value = email, onValueChange = { email = it }, label = { Text("Correo electrónico") }, modifier = Modifier.fillMaxWidth())
+                        OutlinedTextField(value = email, onValueChange = { email = it.replace("\n", "") }, label = { Text("Correo electrónico") }, modifier = Modifier.fillMaxWidth(), singleLine = true, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email))
                         Spacer(modifier = Modifier.height(8.dp))
                         OutlinedTextField(
                             value = password,
-                            onValueChange = { password = it },
+                            onValueChange = { password = it.replace("\n", "") },
                             label = { Text("Contraseña") },
                             visualTransformation = if (passwordVisible) VisualTransformation.None else PasswordVisualTransformation(),
                             trailingIcon = {
@@ -112,16 +114,19 @@ fun RegisterScreen(
                                     )
                                 }
                             },
-                            modifier = Modifier.fillMaxWidth()
+                            modifier = Modifier.fillMaxWidth(),
+                            singleLine = true,
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password)
                         )
 
                         if (userType == "Tienda") {
                             Spacer(modifier = Modifier.height(8.dp))
                             OutlinedTextField(
                                 value = storeName,
-                                onValueChange = { storeName = it },
+                                onValueChange = { storeName = it.replace("\n", "") },
                                 label = { Text("Nombre de tienda o productora") },
-                                modifier = Modifier.fillMaxWidth()
+                                modifier = Modifier.fillMaxWidth(),
+                                singleLine = true
                             )
                         }
 

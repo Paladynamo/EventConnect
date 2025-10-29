@@ -17,8 +17,8 @@ data class Event(
     val comuna: String = "",
     val addressStreet: String = "",
     val addressNumber: String = "",
-    // Imagen y cupos
-    val imageUri: String? = null,
+    // Imágenes y cupos
+    val imageUris: List<String>? = null,
     val hasCapacity: Boolean = false,
     val capacityTotal: Int? = null,
     val capacityAvailable: Int? = null

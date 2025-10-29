@@ -15,7 +15,6 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -82,9 +81,7 @@ fun HomeScreen(
     // Permisos de ubicación y helper
     val permissionLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.RequestMultiplePermissions(),
-        onResult = { grants ->
-            // Se maneja dentro de la función tryUseLocation via estado
-        }
+        onResult = { }
     )
 
     val db = remember { AppDatabase.getDatabase(context) }
@@ -115,7 +112,7 @@ fun HomeScreen(
                 category = e.category,
                 date = e.date,
                 store = e.store,
-                imageUri = e.imageUri,
+                imageUri = e.imageUris?.firstOrNull(),
                 hasCapacity = e.hasCapacity,
                 capacityAvailable = e.capacityAvailable,
                 region = e.region,
@@ -136,7 +133,7 @@ fun HomeScreen(
         }
     }
 
-    // Frases y estilo
+    // Frases
     val frases = listOf(
         "Cada carta cuenta una historia.",
         "Nunca subestimes una buena estrategia.",
@@ -156,16 +153,6 @@ fun HomeScreen(
         }
     }
 
-    val gradientBackground = remember {
-        Brush.verticalGradient(
-            colors = listOf(
-                Color(0xFF0D47A1).copy(alpha = 0.92f),
-                Color(0xFF1976D2).copy(alpha = 0.92f),
-                Color(0xFF42A5F5).copy(alpha = 0.92f)
-            )
-        )
-    }
-
     // Diálogo inicial para elegir ubicación para usuario común
     var showLocationDialog by remember { mutableStateOf(userType != "Tienda" && (selRegion.isBlank() || selComuna.isBlank())) }
 
@@ -175,7 +162,6 @@ fun HomeScreen(
 
     suspend fun reverseGeocodeRegionComuna(lat: Double, lon: Double): Pair<String?, String?> {
         return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            // API 33+: usar listener async
             kotlinx.coroutines.suspendCancellableCoroutine { cont ->
                 try {
                     val geocoder = Geocoder(context, Locale("es", "CL"))
@@ -191,13 +177,9 @@ fun HomeScreen(
                             val comunaMatch = candidateComunas.firstOrNull { normalize(it).contains(normLoc ?: "") || (normLoc?.contains(normalize(it)) == true) }
                             cont.resume(regionMatch to comunaMatch)
                         }
-                        override fun onError(errorMessage: String?) {
-                            cont.resume(null to null)
-                        }
+                        override fun onError(errorMessage: String?) { cont.resume(null to null) }
                     })
-                } catch (_: Exception) {
-                    cont.resume(null to null)
-                }
+                } catch (_: Exception) { cont.resume(null to null) }
             }
         } else {
             try {
@@ -215,9 +197,7 @@ fun HomeScreen(
                     val comunaMatch = candidateComunas.firstOrNull { normalize(it).contains(normLoc ?: "") || (normLoc?.contains(normalize(it)) == true) }
                     regionMatch to comunaMatch
                 } else null to null
-            } catch (_: Exception) {
-                null to null
-            }
+            } catch (_: Exception) { null to null }
         }
     }
 
@@ -237,7 +217,7 @@ fun HomeScreen(
         }
     }
 
-    // Sugerencia de ubicación si difiere de guardada (sin pedir permiso si no lo tiene)
+    // Sugerencia de ubicación si difiere de guardada
     var suggestRegion by remember { mutableStateOf<String?>(null) }
     var suggestComuna by remember { mutableStateOf<String?>(null) }
     LaunchedEffect(userType) {
@@ -258,23 +238,20 @@ fun HomeScreen(
         }
     }
 
+    val colors = MaterialTheme.colorScheme
+
     Scaffold(
         topBar = {
             TopAppBar(
                 title = {
-                    Row {
-                        Text(
-                            "EventConnect",
-                            color = Color.White,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
-                        )
-                    }
+                    Row { Text("EventConnect", color = colors.onPrimary, maxLines = 1, overflow = TextOverflow.Ellipsis) }
                 },
-                colors = TopAppBarDefaults.topAppBarColors(containerColor = Color(0xFF1565C0)),
+                colors = TopAppBarDefaults.topAppBarColors(containerColor = colors.primary),
                 actions = {
                     var menuExpanded by remember { mutableStateOf(false) }
-                    IconButton(onClick = { menuExpanded = true }) { Icon(Icons.Default.MoreVert, contentDescription = "Menú", tint = Color.White) }
+                    IconButton(onClick = { menuExpanded = true }) {
+                        Icon(Icons.Default.MoreVert, contentDescription = "Menú", tint = colors.onPrimary)
+                    }
                     DropdownMenu(expanded = menuExpanded, onDismissRequest = { menuExpanded = false }) {
                         if (userType == "Tienda") {
                             DropdownMenuItem(text = { Text("Solicitudes") }, onClick = { menuExpanded = false; onOpenRequests?.invoke() })
@@ -304,8 +281,8 @@ fun HomeScreen(
             if (userType == "Tienda") {
                 FloatingActionButton(
                     onClick = onCreateEvent,
-                    containerColor = Color(0xFF0D47A1),
-                    contentColor = Color.White
+                    containerColor = colors.primary,
+                    contentColor = colors.onPrimary
                 ) { Text("+", fontSize = 24.sp) }
             }
         }
@@ -315,38 +292,47 @@ fun HomeScreen(
                 .fillMaxSize()
                 .padding(padding)
         ) {
-            // Fondo global
+            // Fondo con imagen suave
             AppBackground { }
 
-            // Aplicar fondo a la pantalla principal
-            Box(modifier = Modifier.fillMaxSize().background(
-                brush = Brush.verticalGradient(
-                    colors = listOf(Color.White, Color.Blue)
-                )
-            )) {
+            // Capa de superficie tenue para mejorar legibilidad
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(colors.surface.copy(alpha = 0.75f))
+            ) {
                 Column(
                     modifier = Modifier
                         .fillMaxSize()
-                        .background(gradientBackground)
                         .padding(16.dp)
                 ) {
-                    Text(
-                        text = "Hola, $userName 👋",
-                        fontSize = 28.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = Color.White
-                    )
+                    Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
+                        Text(
+                            text = "Hola, $userName 👋",
+                            fontSize = 28.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = colors.onSurface
+                        )
+                    }
+                    if (userType == "Tienda" && storeName.isNotBlank()) {
+                        Text(
+                            text = "Dueño de ${storeName}",
+                            color = colors.primary,
+                            fontSize = 16.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            modifier = Modifier.padding(top = 2.dp, bottom = 10.dp)
+                        )
+                    }
                     Crossfade(targetState = fraseActual, label = "frase") { frase ->
                         Text(
                             text = frase,
-                            color = Color(0xFFE3F2FD),
+                            color = colors.onSurface.copy(alpha = 0.8f),
                             fontSize = 16.sp,
                             modifier = Modifier.padding(top = 4.dp, bottom = 16.dp)
                         )
                     }
 
                     if (userType != "Tienda") {
-                        // Nuevo layout de filtros con chips y FlowRow para evitar desbordes
                         FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                             var regionExpanded by remember { mutableStateOf(false) }
                             var comunaExpanded by remember { mutableStateOf(false) }
@@ -387,13 +373,13 @@ fun HomeScreen(
                     Text(
                         text = if (userType == "Tienda") "Tus Eventos Publicados" else if (selComuna.isNotBlank()) "Eventos en $selComuna" else "Eventos Recomendados",
                         fontSize = 20.sp,
-                        color = Color.White,
+                        color = colors.onSurface,
                         fontWeight = FontWeight.Medium,
                         modifier = Modifier.padding(vertical = 8.dp)
                     )
 
                     if (events.isEmpty() && !isRefreshing) {
-                        Text("No hay eventos por ahora", color = Color.White)
+                        Text("No hay eventos por ahora", color = colors.onSurface)
                     } else {
                         LazyColumn(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                             items(events) { event ->
@@ -403,7 +389,7 @@ fun HomeScreen(
                                         .clickable {
                                             if (userType == "Tienda") onEditEvent?.invoke(event.id) else onOpenEvent?.invoke(event.id)
                                         },
-                                    colors = CardDefaults.cardColors(containerColor = Color.White),
+                                    colors = CardDefaults.cardColors(containerColor = colors.surface),
                                     elevation = CardDefaults.cardElevation(6.dp),
                                     shape = RoundedCornerShape(16.dp)
                                 ) {
@@ -418,19 +404,19 @@ fun HomeScreen(
                                             )
                                             Spacer(Modifier.height(8.dp))
                                         }
-                                        Text(event.title, fontSize = 18.sp, fontWeight = FontWeight.Bold, color = Color(0xFF0D47A1))
-                                        Text("Categoría: ${event.category}", color = Color.Gray)
-                                        Text("Fecha: ${event.date}", color = Color.Gray)
-                                        Text("Organiza: ${event.store}", color = Color.Gray)
-                                        if (event.region.isNotBlank()) Text("Región: ${event.region}", color = Color.Gray)
-                                        if (event.comuna.isNotBlank()) Text("Comuna: ${event.comuna}", color = Color.Gray)
-                                        if (event.address.isNotBlank()) Text("Dirección: ${event.address}", color = Color.Gray)
+                                        Text(event.title, fontSize = 18.sp, fontWeight = FontWeight.Bold, color = colors.primary)
+                                        Text("Categoría: ${event.category}", color = colors.onSurface.copy(alpha = 0.7f))
+                                        Text("Fecha: ${event.date}", color = colors.onSurface.copy(alpha = 0.7f))
+                                        Text("Organiza: ${event.store}", color = colors.onSurface.copy(alpha = 0.7f))
+                                        if (event.region.isNotBlank()) Text("Región: ${event.region}", color = colors.onSurface.copy(alpha = 0.7f))
+                                        if (event.comuna.isNotBlank()) Text("Comuna: ${event.comuna}", color = colors.onSurface.copy(alpha = 0.7f))
+                                        if (event.address.isNotBlank()) Text("Dirección: ${event.address}", color = colors.onSurface.copy(alpha = 0.7f))
                                         if (event.hasCapacity) {
                                             Spacer(Modifier.height(4.dp))
                                             Text("Cupos disponibles: ${event.capacityAvailable ?: 0}", color = Color(0xFF2E7D32))
                                         }
                                         Spacer(Modifier.height(6.dp))
-                                        Text(event.description)
+                                        Text(event.description, color = colors.onSurface)
                                     }
                                 }
                             }
@@ -445,7 +431,11 @@ fun HomeScreen(
                             .background(Color(0x55000000)),
                         contentAlignment = androidx.compose.ui.Alignment.Center
                     ) {
-                        SearchLoading(message = "Buscando...", drawableRes = R.drawable.search_anim)
+                        Column(horizontalAlignment = androidx.compose.ui.Alignment.CenterHorizontally) {
+                            GifImage(resId = R.drawable.gatito_girando, modifier = Modifier.size(112.dp))
+                            Spacer(Modifier.height(8.dp))
+                            Text("Actualizando…", color = Color.White)
+                        }
                     }
                 }
             }
@@ -484,7 +474,6 @@ fun HomeScreen(
         )
     }
 
-    // Diálogo de sugerencia para actualizar ubicación si difiere de la detectada
     if (suggestRegion != null && suggestComuna != null) {
         AlertDialog(
             onDismissRequest = { suggestRegion = null; suggestComuna = null },

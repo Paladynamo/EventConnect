@@ -34,4 +34,16 @@ interface UserDao {
     // ✅ Devuelve todos los usuarios (solo para pruebas o debug)
     @Query("SELECT * FROM users ORDER BY id ASC")
     suspend fun getAllUsers(): List<User>
+
+    // Actualiza el nombre de un usuario por email
+    @Query("UPDATE users SET name = :newName WHERE lower(email) = lower(:email)")
+    suspend fun updateName(email: String, newName: String): Int
+
+    // Actualiza la contraseña de un usuario verificando la contraseña actual
+    @Query("UPDATE users SET password = :newPassword WHERE lower(email) = lower(:email) AND password = :currentPassword")
+    suspend fun updatePasswordChecked(email: String, currentPassword: String, newPassword: String): Int
+
+    // Elimina una cuenta de usuario por email
+    @Query("DELETE FROM users WHERE lower(email) = lower(:email)")
+    suspend fun deleteByEmail(email: String): Int
 }

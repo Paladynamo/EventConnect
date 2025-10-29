@@ -1,4 +1,4 @@
-# 🎟️ EventConnect
+r# 🎟️ EventConnect
 
 **EventConnect** es una aplicación móvil desarrollada en **Kotlin** con **Jetpack Compose**, diseñada para conectar a tiendas, organizadores y amantes de los eventos en un solo lugar. Permite crear, descubrir y gestionar eventos de manera sencilla, moderna y visualmente atractiva.
 
@@ -77,6 +77,17 @@
 ## 📄 Licencia
 
 Este proyecto está bajo la licencia MIT. Consulta el archivo `LICENSE` para más detalles.
+
+---
+
+## Roadmap (próxima versión)
+
+- Verificación de conectividad en el arranque y estrategia de sincronización offline-first con backend:
+  - Detectar conectividad (Wi‑Fi/datos) y mostrar aviso si no hay Internet.
+  - Encolar operaciones locales y sincronizarlas cuando exista conexión (WorkManager + Retrofit).
+  - Mantener siempre la data en Room para modo sin conexión.
+
+Estas funcionalidades se posponen para la siguiente iteración cuando el backend esté disponible.
 
 ---
 

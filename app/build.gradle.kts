@@ -69,7 +69,6 @@ dependencies {
     implementation("androidx.room:room-ktx:2.6.1")
 
     // Coroutines
-    // Eliminada la versión duplicada 1.8.0
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.9.0")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-play-services:1.9.0")
 
@@ -87,7 +86,12 @@ dependencies {
     implementation("com.google.android.gms:play-services-location:21.0.1")
     implementation("androidx.compose.material:material-icons-extended")
 
-    // Añadir dependencias necesarias para resolver errores
-    implementation("androidx.compose.foundation:foundation:1.5.0")
-    implementation("androidx.compose.ui:ui-tooling-preview:1.5.0")
+    // Compose Foundation + tooling preview (gestionadas por el BOM)
+    implementation("androidx.compose.foundation:foundation")
+    implementation("androidx.compose.ui:ui-tooling-preview")
+
+    // WorkManager para sincronización en segundo plano
+    implementation("androidx.work:work-runtime-ktx:2.9.0")
+
+    // Editor de imágenes externo eliminado: migrado a edición nativa (rotar/flip/crop) sin dependencias
 }

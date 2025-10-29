@@ -14,8 +14,6 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Brush
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.core.content.edit
 import androidx.navigation.NavType
@@ -23,30 +21,17 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
-import com.example.eventconnect.ui.CreateEventScreen
-import com.example.eventconnect.ui.EditEventScreen
-import com.example.eventconnect.ui.EventDetailScreen
-import com.example.eventconnect.ui.HomeScreen
-import com.example.eventconnect.ui.LoginScreen
-import com.example.eventconnect.ui.RegisterScreen
-import com.example.eventconnect.ui.MyReservationsScreen
-import com.example.eventconnect.ui.ReservationsForOrganizerScreen
-import com.example.eventconnect.ui.ForgotPasswordScreen
-import com.example.eventconnect.ui.ProfileScreen
+import com.example.eventconnect.ui.*
 import com.example.eventconnect.ui.theme.EventConnectTheme
+import androidx.compose.material3.MaterialTheme
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        // Aplicar fondo y corregir mensaje del toast en el login
         setContent {
             EventConnectTheme {
                 Box(
-                    modifier = Modifier.fillMaxSize().background(
-                        brush = Brush.verticalGradient(
-                            colors = listOf(Color.White, Color.Blue)
-                        )
-                    )
+                    modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)
                 ) {
                     RequestNotificationPermissionOnce()
                     AppNavigation()
@@ -78,29 +63,17 @@ fun AppNavigation() {
     }
 
     NavHost(navController = navController, startDestination = if (hasSession) "home" else "login") {
-        composable("login") {
-            LoginScreen(navController = navController)
-        }
-        composable("register") {
-            RegisterScreen(onBackToLogin = { navController.popBackStack() })
-        }
-        composable("forgotPassword") {
-            ForgotPasswordScreen(onBack = { navController.popBackStack() })
-        }
+        composable("login") { LoginScreen(navController = navController) }
+        composable("register") { RegisterScreen(onBackToLogin = { navController.popBackStack() }) }
+        composable("forgotPassword") { ForgotPasswordScreen(onBack = { navController.popBackStack() }) }
         composable("home") {
             val context = LocalContext.current
             HomeScreen(
                 onLogout = {
-                    // Limpia sesión y regresa al login
-                    context.getSharedPreferences("user_session", Context.MODE_PRIVATE)
-                        .edit { clear() }
-                    navController.navigate("login") {
-                        popUpTo("home") { inclusive = true }
-                    }
+                    context.getSharedPreferences("user_session", Context.MODE_PRIVATE).edit { clear() }
+                    navController.navigate("login") { popUpTo("home") { inclusive = true } }
                 },
-                onCreateEvent = {
-                    navController.navigate("createEvent")
-                },
+                onCreateEvent = { navController.navigate("createEvent") },
                 onOpenEvent = { eventId -> navController.navigate("eventDetail/$eventId") },
                 onEditEvent = { eventId -> navController.navigate("editEvent/$eventId") },
                 onOpenReservations = { navController.navigate("reservations") },
@@ -133,13 +106,21 @@ fun AppNavigation() {
             EventDetailScreen(eventId = eventId, onBack = { navController.popBackStack() })
         }
         composable("reservations") {
-            MyReservationsScreen(onBack = { navController.popBackStack() })
+            MyReservationsScreen(
+                { navController.popBackStack() },
+                { eventId -> navController.navigate("eventDetail/$eventId") }
+            )
         }
-        composable("requests") {
-            ReservationsForOrganizerScreen(onBack = { navController.popBackStack() })
-        }
+        composable("requests") { ReservationsForOrganizerScreen(onBack = { navController.popBackStack() }) }
         composable("profile") {
-            ProfileScreen(onBack = { navController.popBackStack() })
+            ProfileScreen(
+                onBack = { navController.popBackStack() },
+                onAccountDeleted = {
+                    navController.navigate("login") {
+                        popUpTo("home") { inclusive = true }
+                    }
+                }
+            )
         }
     }
 }
