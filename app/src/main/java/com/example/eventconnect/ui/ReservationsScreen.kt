@@ -23,6 +23,7 @@ import com.example.eventconnect.data.AppDatabase
 import com.example.eventconnect.data.Event
 import com.example.eventconnect.data.PendingOperation
 import com.example.eventconnect.data.Reservation
+import com.example.eventconnect.data.UserInterest
 import com.example.eventconnect.notification.NotificationHelper
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -164,6 +165,7 @@ fun ReservationsForOrganizerScreen(onBack: () -> Unit) {
                                                             AppDatabase.getDatabase(context).pendingOperationDao().insert(
                                                                 PendingOperation(type = "RESERVATION_APPROVE", payload = payload)
                                                             )
+                                                            withContext(Dispatchers.IO) { db.userInterestDao().insert(UserInterest(userEmail = current.userEmail, eventId = current.eventId, type = "APPROVED")) }
                                                         }
                                                     }
                                                     refresh()

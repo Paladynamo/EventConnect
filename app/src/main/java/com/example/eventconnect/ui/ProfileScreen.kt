@@ -26,9 +26,12 @@ import android.content.pm.PackageManager
 import androidx.core.content.ContextCompat
 import android.content.Context
 import android.graphics.Bitmap
+import android.graphics.BitmapFactory
+import android.graphics.Matrix
 import android.net.Uri
 import java.io.File
 import java.io.FileOutputStream
+import java.io.InputStream
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -55,6 +58,9 @@ fun ProfileScreen(onBack: () -> Unit, onAccountDeleted: () -> Unit) {
     var deletePass by remember { mutableStateOf("") }
     var deletePassVisible by remember { mutableStateOf(false) }
     var deleteConfirmText by remember { mutableStateOf("") }
+
+    // Estado editor de foto
+    var showEditPhoto by remember { mutableStateOf(false) }
 
     // Launchers: galería y cámara
     val galleryPicker = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
@@ -114,6 +120,9 @@ fun ProfileScreen(onBack: () -> Unit, onAccountDeleted: () -> Unit) {
                         val granted = ContextCompat.checkSelfPermission(context, Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED
                         if (granted) cameraLauncher.launch(null) else cameraPermissionLauncher.launch(Manifest.permission.CAMERA)
                     }) { Text("Cámara") }
+                    if (avatarUri != null) {
+                        OutlinedButton(onClick = { showEditPhoto = true }) { Text("Editar foto") }
+                    }
                 }
 
                 Spacer(Modifier.height(16.dp))
@@ -272,6 +281,168 @@ fun ProfileScreen(onBack: () -> Unit, onAccountDeleted: () -> Unit) {
             }
         }
     }
+
+    if (showEditPhoto && avatarUri != null) {
+        EditAvatarDialog(
+            initialUri = avatarUri!!,
+            onDismiss = { showEditPhoto = false },
+            onSave = { editedBitmap ->
+                val saved = saveBitmapToInternal(context, editedBitmap)
+                if (saved != null) {
+                    avatarUri = saved
+                    prefs.edit { putString("avatarUri", saved) }
+                    Toast.makeText(context, "Avatar actualizado", Toast.LENGTH_LONG).show()
+                } else {
+                    Toast.makeText(context, "No se pudo guardar la edición", Toast.LENGTH_LONG).show()
+                }
+                showEditPhoto = false
+            }
+        )
+    }
+}
+
+@Composable
+private fun EditAvatarDialog(
+    initialUri: String,
+    onDismiss: () -> Unit,
+    onSave: (Bitmap) -> Unit
+) {
+    val context = androidx.compose.ui.platform.LocalContext.current
+    var original by remember { mutableStateOf<Bitmap?>(null) }
+    var preview by remember { mutableStateOf<Bitmap?>(null) }
+    var rotation by remember { mutableStateOf(0) } // múltiplos de 90
+    var flipH by remember { mutableStateOf(false) }
+    var flipV by remember { mutableStateOf(false) }
+    var busy by remember { mutableStateOf(false) }
+    val scope = rememberCoroutineScope()
+
+    // Cargar bitmap una vez
+    LaunchedEffect(initialUri) {
+        withContext(Dispatchers.IO) {
+            original = loadBitmapFromUri(context, Uri.parse(initialUri))
+            preview = original
+        }
+    }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Editar foto de perfil") },
+        text = {
+            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                if (preview != null) {
+                    AsyncImage(
+                        model = preview,
+                        contentDescription = null,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(240.dp)
+                    )
+                } else {
+                    Box(Modifier.fillMaxWidth().height(240.dp), contentAlignment = Alignment.Center) {
+                        CircularProgressIndicator()
+                    }
+                }
+                Spacer(Modifier.height(12.dp))
+                // Controles
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    OutlinedButton(enabled = !busy, onClick = {
+                        rotation = (rotation + 90) % 360
+                        applyAsync(original, rotation, flipH, flipV) { bmp -> preview = bmp }
+                    }) { Text("Rotar 90°") }
+                    OutlinedButton(enabled = !busy, onClick = {
+                        flipH = !flipH
+                        applyAsync(original, rotation, flipH, flipV) { bmp -> preview = bmp }
+                    }) { Text("Espejo H") }
+                    OutlinedButton(enabled = !busy, onClick = {
+                        flipV = !flipV
+                        applyAsync(original, rotation, flipH, flipV) { bmp -> preview = bmp }
+                    }) { Text("Espejo V") }
+                }
+                Spacer(Modifier.height(8.dp))
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    OutlinedButton(enabled = !busy, onClick = {
+                        val src = preview ?: original
+                        if (src != null) {
+                            busy = true
+                            // Recorte centrado 1:1
+                            scope.launch(Dispatchers.Default) {
+                                val cropped = cropCenterSquare(src)
+                                withContext(Dispatchers.Main) {
+                                    preview = cropped
+                                    busy = false
+                                }
+                            }
+                        }
+                    }) { Text("Recortar 1:1") }
+                    OutlinedButton(enabled = !busy, onClick = {
+                        // Restablecer al original
+                        rotation = 0
+                        flipH = false
+                        flipV = false
+                        preview = original
+                    }) { Text("Restablecer") }
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(enabled = preview != null && !busy, onClick = {
+                preview?.let { onSave(it) }
+            }) { Text("Guardar") }
+        },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancelar") } }
+    )
+}
+
+private fun applyAsync(
+    original: Bitmap?,
+    rotation: Int,
+    flipH: Boolean,
+    flipV: Boolean,
+    onReady: (Bitmap?) -> Unit
+) {
+    if (original == null) { onReady(null); return }
+    // Lanzar en background sin GlobalScope
+    kotlinx.coroutines.CoroutineScope(Dispatchers.Default).launch {
+        val transformed = transformBitmap(original, rotation, flipH, flipV)
+        withContext(Dispatchers.Main) { onReady(transformed) }
+    }
+}
+
+private fun transformBitmap(src: Bitmap, rotation: Int, flipH: Boolean, flipV: Boolean): Bitmap {
+    val m = Matrix()
+    if (flipH || flipV) {
+        val sx = if (flipH) -1f else 1f
+        val sy = if (flipV) -1f else 1f
+        m.postScale(sx, sy)
+    }
+    if (rotation % 360 != 0) m.postRotate(rotation.toFloat())
+
+    val transformed = Bitmap.createBitmap(src, 0, 0, src.width, src.height, m, true)
+    return transformed
+}
+
+private fun cropCenterSquare(src: Bitmap): Bitmap {
+    val size = minOf(src.width, src.height)
+    val x = (src.width - size) / 2
+    val y = (src.height - size) / 2
+    return Bitmap.createBitmap(src, x, y, size, size)
+}
+
+private fun loadBitmapFromUri(context: Context, uri: Uri): Bitmap? {
+    return try {
+        // Primer pase: obtener dimensiones
+        val options = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+        context.contentResolver.openInputStream(uri)?.use { BitmapFactory.decodeStream(it, null, options) }
+        val maxDim = 2048 // límite razonable para edición de avatar
+        var inSample = 1
+        var width = options.outWidth
+        var height = options.outHeight
+        while (width / inSample > maxDim || height / inSample > maxDim) {
+            inSample *= 2
+        }
+        val decodeOpts = BitmapFactory.Options().apply { inSampleSize = inSample; inPreferredConfig = Bitmap.Config.ARGB_8888 }
+        context.contentResolver.openInputStream(uri)?.use { BitmapFactory.decodeStream(it, null, decodeOpts) }
+    } catch (_: Exception) { null }
 }
 
 private fun saveBitmapToInternal(context: Context, bmp: Bitmap): String? {

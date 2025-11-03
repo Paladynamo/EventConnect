@@ -7,8 +7,8 @@ import androidx.room.RoomDatabase
 import androidx.room.TypeConverters
 
 @Database(
-    entities = [User::class, Event::class, Reservation::class, PendingOperation::class],
-    version = 9,
+    entities = [User::class, Event::class, Reservation::class, PendingOperation::class, UserInterest::class, EventUpdateNotice::class],
+    version = 10,
     exportSchema = false
 )
 @TypeConverters(Converters::class)
@@ -18,6 +18,8 @@ abstract class AppDatabase : RoomDatabase() {
     abstract fun eventDao(): EventDao
     abstract fun reservationDao(): ReservationDao
     abstract fun pendingOperationDao(): PendingOperationDao
+    abstract fun userInterestDao(): UserInterestDao
+    abstract fun eventUpdateNoticeDao(): EventUpdateNoticeDao
 
     companion object {
         @Volatile

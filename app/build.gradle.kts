@@ -94,4 +94,6 @@ dependencies {
     implementation("androidx.work:work-runtime-ktx:2.9.0")
 
     // Editor de imágenes externo eliminado: migrado a edición nativa (rotar/flip/crop) sin dependencias
+
+    implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.8.4")
 }

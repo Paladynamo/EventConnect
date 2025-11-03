@@ -1,6 +1,7 @@
 package com.example.eventconnect.ui
 
 import android.Manifest
+import android.app.DatePickerDialog
 import android.content.Context
 import android.content.pm.PackageManager
 import android.graphics.Bitmap
@@ -28,16 +29,10 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
-import com.example.eventconnect.data.PendingOperation
-import com.example.eventconnect.data.AppDatabase
 import com.example.eventconnect.data.Event
 import com.example.eventconnect.location.ChileLocations
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
-import java.io.File
-import java.io.FileOutputStream
-import java.io.InputStream
+import com.example.eventconnect.notification.NotificationHelper
+import com.example.eventconnect.ui.vm.EditEventViewModel
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.ui.graphics.graphicsLayer
@@ -45,6 +40,16 @@ import kotlin.math.abs
 import java.util.Collections
 import androidx.compose.ui.platform.LocalDensity
 import androidx.core.content.ContextCompat
+import java.text.ParseException
+import java.text.SimpleDateFormat
+import java.util.Calendar
+import java.util.Locale
+import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.compose.runtime.rememberCoroutineScope
+import kotlinx.coroutines.launch
+import java.io.File
+import java.io.FileOutputStream
+import java.io.InputStream
 
 @Composable
 fun EditEventScreen(
@@ -52,8 +57,7 @@ fun EditEventScreen(
     onBack: () -> Unit
 ) {
     val context = LocalContext.current
-    val db = remember { AppDatabase.getDatabase(context) }
-    val eventDao = db.eventDao()
+    val vm: EditEventViewModel = viewModel()
     val coroutineScope = rememberCoroutineScope()
 
     val categorias = listOf("TCG", "Juegos de Mesa", "Eventos")
@@ -91,8 +95,8 @@ fun EditEventScreen(
 
     // Cargar datos del evento al abrir la pantalla
     LaunchedEffect(eventId) {
-        val loadedEvent = withContext(Dispatchers.IO) { eventDao.getEventById(eventId) }
-        loadedEvent?.let {
+        val loaded = vm.getEvent(eventId)
+        loaded?.let {
             event = it
             title = it.title
             description = it.description
@@ -140,6 +144,23 @@ fun EditEventScreen(
         imageUris = imageUris.map { if (it == oldUriStr) newUri else it }
     }
 
+    // Selector de fecha con bloqueo de días pasados
+    val calendar = Calendar.getInstance()
+    val datePickerDialog = DatePickerDialog(
+        context,
+        { _, year, month, day -> date = "$day/${month + 1}/$year" },
+        calendar.get(Calendar.YEAR),
+        calendar.get(Calendar.MONTH),
+        calendar.get(Calendar.DAY_OF_MONTH)
+    )
+    val startOfToday = Calendar.getInstance().apply {
+        set(Calendar.HOUR_OF_DAY, 0)
+        set(Calendar.MINUTE, 0)
+        set(Calendar.SECOND, 0)
+        set(Calendar.MILLISECOND, 0)
+    }.timeInMillis
+    datePickerDialog.datePicker.minDate = startOfToday
+
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -160,7 +181,9 @@ fun EditEventScreen(
         Spacer(modifier = Modifier.height(8.dp))
         CategoryDropdown(selected = category, options = categorias, onSelected = { category = it })
         Spacer(modifier = Modifier.height(8.dp))
-        OutlinedTextField(value = date, onValueChange = { date = it }, label = { Text("Fecha") })
+        OutlinedTextField(value = date, onValueChange = {}, enabled = false, label = { Text("Fecha") })
+        Spacer(modifier = Modifier.height(6.dp))
+        Button(onClick = { datePickerDialog.show() }) { Text("Seleccionar fecha") }
         Spacer(modifier = Modifier.height(8.dp))
         OutlinedTextField(value = store, onValueChange = { store = it }, label = { Text("Tienda / Organizador") })
 
@@ -301,7 +324,7 @@ fun EditEventScreen(
                         return@launch
                     }
                     if (region.isBlank() || comuna.isBlank() || addressStreet.isBlank() || addressNumber.isBlank()) {
-                        Toast.makeText(context, "Completa la ubicación y dirección", Toast.LENGTH_LONG).show()
+                        Toast.makeText(context, "Dirección completa obligatoria (calle y número)", Toast.LENGTH_LONG).show()
                         return@launch
                     }
                     val total = if (hasCapacity) capacityText.toIntOrNull() else null
@@ -309,39 +332,63 @@ fun EditEventScreen(
                         Toast.makeText(context, "Ingresa una cantidad de cupos válida (> 0)", Toast.LENGTH_LONG).show()
                         return@launch
                     }
-                    withContext(Dispatchers.IO) {
-                        event?.let { e ->
-                            val newAvailable = when {
-                                !hasCapacity -> null
-                                e.capacityAvailable != null && total != null -> minOf(e.capacityAvailable, total)
-                                else -> total
-                            }
-                            val updated = e.copy(
-                                title = title,
-                                description = description,
-                                category = category,
-                                date = date,
-                                store = store,
-                                imageUris = imageUris,
-                                hasCapacity = hasCapacity,
-                                capacityTotal = total,
-                                capacityAvailable = newAvailable,
-                                region = region,
-                                comuna = comuna,
-                                addressStreet = addressStreet,
-                                addressNumber = addressNumber
-                            )
-                            eventDao.updateEvent(updated)
-                            // Encola para sincronizar
-                            val payload = "{" +
-                                "\"id\":${e.id}," +
-                                "\"title\":\"$title\"," +
-                                "\"category\":\"$category\"" +
-                                "}"
-                            AppDatabase.getDatabase(context).pendingOperationDao().insert(
-                                PendingOperation(type = "EVENT_UPDATE", payload = payload)
-                            )
-                        }
+                    // Validación de fecha no pasada
+                    val selectedMillis = parseDateToMillisEdit(date)
+                    val startOfToday = java.util.Calendar.getInstance().apply {
+                        set(java.util.Calendar.HOUR_OF_DAY, 0)
+                        set(java.util.Calendar.MINUTE, 0)
+                        set(java.util.Calendar.SECOND, 0)
+                        set(java.util.Calendar.MILLISECOND, 0)
+                    }.timeInMillis
+                    if (selectedMillis == null) {
+                        Toast.makeText(context, "Fecha inválida. Usa un formato dd/MM/yyyy", Toast.LENGTH_LONG).show()
+                        return@launch
+                    }
+                    if (selectedMillis < startOfToday) {
+                        Toast.makeText(context, "La fecha no puede ser anterior a hoy", Toast.LENGTH_LONG).show()
+                        return@launch
+                    }
+                    // Detectar cambios relevantes
+                    val e = event
+                    if (e == null) {
+                        Toast.makeText(context, "Evento no encontrado", Toast.LENGTH_LONG).show()
+                        return@launch
+                    }
+                    val changes = mutableListOf<String>()
+                    if (e.date != date) changes += "fecha: ${e.date} → $date"
+                    if (e.region != region) changes += "región: ${e.region} → $region"
+                    if (e.comuna != comuna) changes += "comuna: ${e.comuna} → $comuna"
+                    val oldAddr = listOf(e.addressStreet, e.addressNumber).filter { it.isNotBlank() }.joinToString(" ")
+                    val newAddr = listOf(addressStreet, addressNumber).filter { it.isNotBlank() }.joinToString(" ")
+                    if (oldAddr != newAddr) changes += "dirección: $oldAddr → $newAddr"
+
+                    val newAvailable = when {
+                        !hasCapacity -> null
+                        e.capacityAvailable != null && total != null -> minOf(e.capacityAvailable, total)
+                        else -> total
+                    }
+                    val updated = e.copy(
+                        title = title,
+                        description = description,
+                        category = category,
+                        date = date,
+                        store = store,
+                        imageUris = imageUris,
+                        hasCapacity = hasCapacity,
+                        capacityTotal = total,
+                        capacityAvailable = newAvailable,
+                        region = region,
+                        comuna = comuna,
+                        addressStreet = addressStreet,
+                        addressNumber = addressNumber
+                    )
+                    vm.update(updated)
+                    vm.queueUpdatePayload(e.id, title, category)
+                    if (changes.isNotEmpty()) {
+                        val noticeText = changes.joinToString("; ")
+                        vm.notifyInterested(e.id, title, store, noticeText)
+                        NotificationHelper.createNotificationChannel(context)
+                        NotificationHelper.showEventUpdatedNotification(context, eventTitle = title, store = store)
                     }
                     Toast.makeText(context, "Evento actualizado correctamente", Toast.LENGTH_LONG).show()
                     onBack()
@@ -358,18 +405,12 @@ fun EditEventScreen(
         OutlinedButton(
             onClick = {
                 coroutineScope.launch {
-                    withContext(Dispatchers.IO) {
-                        event?.let { e ->
-                            eventDao.deleteEvent(e)
-                            // Encola delete para sincronizar
-                            val payload = "{" + "\"id\":${e.id}" + "}"
-                            AppDatabase.getDatabase(context).pendingOperationDao().insert(
-                                PendingOperation(type = "EVENT_DELETE", payload = payload)
-                            )
-                        }
+                    event?.let { e ->
+                        vm.delete(e)
+                        vm.queueDelete(e.id)
+                        Toast.makeText(context, "Evento eliminado", Toast.LENGTH_LONG).show()
+                        onBack()
                     }
-                    Toast.makeText(context, "Evento eliminado", Toast.LENGTH_LONG).show()
-                    onBack()
                 }
             },
             modifier = Modifier.fillMaxWidth(),
@@ -475,4 +516,23 @@ private fun saveBitmapToInternal(context: Context, bmp: Bitmap): String? {
     } catch (_: Exception) {
         null
     }
+}
+
+// Helper de fecha (edición)
+private fun parseDateToMillisEdit(dateStr: String): Long? {
+    val patterns = listOf(
+        "d/M/yyyy",
+        "dd/MM/yyyy",
+        "dd-MM-yyyy",
+        "yyyy-MM-dd"
+    )
+    for (p in patterns) {
+        val sdf = SimpleDateFormat(p, Locale.getDefault())
+        sdf.isLenient = false
+        try {
+            val d = sdf.parse(dateStr) ?: continue
+            return d.time
+        } catch (_: ParseException) { }
+    }
+    return null
 }

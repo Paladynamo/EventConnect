@@ -41,6 +41,8 @@ import kotlinx.coroutines.launch
 import java.io.File
 import java.io.FileOutputStream
 import java.io.InputStream
+import java.text.ParseException
+import java.text.SimpleDateFormat
 import java.util.*
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -99,6 +101,14 @@ fun CreateEventScreen(
         calendar.get(Calendar.MONTH),
         calendar.get(Calendar.DAY_OF_MONTH)
     )
+    // Deshabilitar días anteriores a hoy (inicio del día local)
+    val startOfToday = Calendar.getInstance().apply {
+        set(Calendar.HOUR_OF_DAY, 0)
+        set(Calendar.MINUTE, 0)
+        set(Calendar.SECOND, 0)
+        set(Calendar.MILLISECOND, 0)
+    }.timeInMillis
+    datePickerDialog.datePicker.minDate = startOfToday
 
     val scrollState = rememberScrollState()
 
@@ -258,6 +268,16 @@ fun CreateEventScreen(
                     } else if (hasCapacity && (capacityText.isBlank() || capacityText.toIntOrNull() == null || capacityText.toInt() <= 0)) {
                         Toast.makeText(context, "Ingresa una cantidad de cupos válida (> 0)", Toast.LENGTH_LONG).show()
                     } else {
+                        val selectedMillis = parseDateToMillis(date)
+                        val todayStart = startOfToday
+                        if (selectedMillis == null) {
+                            Toast.makeText(context, "Fecha inválida. Usa el selector de fecha.", Toast.LENGTH_LONG).show()
+                            return@Button
+                        }
+                        if (selectedMillis < todayStart) {
+                            Toast.makeText(context, "La fecha no puede ser anterior a hoy", Toast.LENGTH_LONG).show()
+                            return@Button
+                        }
                         scope.launch(Dispatchers.IO) {
                             val total = if (hasCapacity) capacityText.toInt() else null
                             val event = Event(
@@ -397,4 +417,23 @@ private fun saveBitmapToInternal(context: Context, bmp: Bitmap): String? {
     } catch (_: Exception) {
         null
     }
+}
+
+// Helpers de fecha para validación
+private fun parseDateToMillis(dateStr: String): Long? {
+    val patterns = listOf(
+        "d/M/yyyy",
+        "dd/MM/yyyy",
+        "dd-MM-yyyy",
+        "yyyy-MM-dd"
+    )
+    for (p in patterns) {
+        val sdf = SimpleDateFormat(p, Locale.getDefault())
+        sdf.isLenient = false
+        try {
+            val d = sdf.parse(dateStr) ?: continue
+            return d.time
+        } catch (_: ParseException) { }
+    }
+    return null
 }

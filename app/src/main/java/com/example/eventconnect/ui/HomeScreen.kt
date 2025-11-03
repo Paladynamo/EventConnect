@@ -21,9 +21,11 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.eventconnect.R
-import com.example.eventconnect.data.AppDatabase
 import com.example.eventconnect.location.ChileLocations
 import com.example.eventconnect.location.LocationHelper
+import com.example.eventconnect.ui.vm.HomeViewModel
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.lifecycle.viewmodel.compose.viewModel
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -34,9 +36,12 @@ import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.material3.AssistChip
 import androidx.compose.material3.FilterChip
+import com.example.eventconnect.data.Event
+import com.example.eventconnect.data.EventUpdateNotice
 import kotlin.coroutines.resume
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.MoreVert
+import coil.compose.AsyncImage
 
 // Modelo UI enriquecido
 
@@ -71,6 +76,10 @@ fun HomeScreen(
     val userName = prefs.getString("name", "Usuario") ?: "Usuario"
     val userType = prefs.getString("type", "Usuario") ?: "Usuario"
     val storeName = prefs.getString("storeName", "") ?: ""
+    val email = prefs.getString("email", "") ?: ""
+
+    // ViewModel
+    val vm: HomeViewModel = viewModel()
 
     // Preferencias de ubicación del usuario común
     val appPrefs = remember { context.getSharedPreferences("app_prefs", Context.MODE_PRIVATE) }
@@ -84,27 +93,15 @@ fun HomeScreen(
         onResult = { }
     )
 
-    val db = remember { AppDatabase.getDatabase(context) }
-    val eventDao = remember { db.eventDao() }
     val scope = rememberCoroutineScope()
 
     var isRefreshing by remember { mutableStateOf(false) }
-    var events by remember { mutableStateOf<List<EventUi>>(emptyList()) }
 
-    suspend fun loadEvents() {
-        val loaded = withContext(Dispatchers.IO) {
-            if (userType == "Tienda" && storeName.isNotBlank()) {
-                eventDao.getEventsByStore(storeName)
-            } else {
-                if (selRegion.isNotBlank() && selComuna.isNotBlank()) {
-                    if (selCategory.isNotBlank()) eventDao.getEventsByComunaAndCategory(selRegion, selComuna, selCategory)
-                    else eventDao.getEventsByComuna(selRegion, selComuna)
-                } else {
-                    eventDao.getAllEvents()
-                }
-            }
-        }
-        events = loaded.map { e ->
+    // Recoger eventos y mapear a UI
+    val eventsState = vm.events.collectAsState(initial = emptyList())
+    val eventsRaw: List<Event> = eventsState.value
+    val events: List<EventUi> = remember(eventsRaw) {
+        eventsRaw.map { e ->
             EventUi(
                 id = e.id,
                 title = e.title,
@@ -122,13 +119,26 @@ fun HomeScreen(
         }
     }
 
+    // Cargar avisos
+    val noticesState = vm.notices.collectAsState(initial = emptyList())
+    val notices: List<EventUpdateNotice> = noticesState.value
+    var showNotices by remember { mutableStateOf(false) }
+    LaunchedEffect(email) { vm.loadNotices(email) }
+    LaunchedEffect(notices) { if (notices.isNotEmpty()) showNotices = true }
+
+    // Cargar eventos segun filtros
     LaunchedEffect(userType, storeName, selRegion, selComuna, selCategory) {
         isRefreshing = true
         val start = System.currentTimeMillis()
-        try { loadEvents() } finally {
+        try {
+            if (userType == "Tienda" && storeName.isNotBlank()) vm.loadByStore(storeName)
+            else if (selRegion.isNotBlank() && selComuna.isNotBlank()) {
+                if (selCategory.isNotBlank()) vm.loadByRegionComunaCategory(selRegion, selComuna, selCategory) else vm.loadByRegionComuna(selRegion, selComuna)
+            } else vm.loadAll()
+        } finally {
             val elapsed = System.currentTimeMillis() - start
             val min = 800L
-            if (elapsed < min) delay(min - elapsed)
+            if (elapsed < min) kotlinx.coroutines.delay(min - elapsed)
             isRefreshing = false
         }
     }
@@ -264,7 +274,7 @@ fun HomeScreen(
                             scope.launch {
                                 isRefreshing = true
                                 val start = System.currentTimeMillis()
-                                try { loadEvents() } finally {
+                                try { vm.loadAll() } finally {
                                     val elapsed = System.currentTimeMillis() - start
                                     val min = 800L
                                     if (elapsed < min) delay(min - elapsed)
@@ -382,21 +392,21 @@ fun HomeScreen(
                         Text("No hay eventos por ahora", color = colors.onSurface)
                     } else {
                         LazyColumn(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                            items(events) { event ->
+                            items(events, key = { it.id }) { ev ->
                                 Card(
                                     modifier = Modifier
                                         .fillMaxWidth()
                                         .clickable {
-                                            if (userType == "Tienda") onEditEvent?.invoke(event.id) else onOpenEvent?.invoke(event.id)
+                                            if (userType == "Tienda") onEditEvent?.invoke(ev.id) else onOpenEvent?.invoke(ev.id)
                                         },
                                     colors = CardDefaults.cardColors(containerColor = colors.surface),
                                     elevation = CardDefaults.cardElevation(6.dp),
                                     shape = RoundedCornerShape(16.dp)
                                 ) {
                                     Column(Modifier.padding(16.dp)) {
-                                        if (event.imageUri != null) {
-                                            coil.compose.AsyncImage(
-                                                model = event.imageUri,
+                                        if (ev.imageUri != null) {
+                                            AsyncImage(
+                                                model = ev.imageUri,
                                                 contentDescription = "Imagen del evento",
                                                 modifier = Modifier
                                                     .fillMaxWidth()
@@ -404,19 +414,19 @@ fun HomeScreen(
                                             )
                                             Spacer(Modifier.height(8.dp))
                                         }
-                                        Text(event.title, fontSize = 18.sp, fontWeight = FontWeight.Bold, color = colors.primary)
-                                        Text("Categoría: ${event.category}", color = colors.onSurface.copy(alpha = 0.7f))
-                                        Text("Fecha: ${event.date}", color = colors.onSurface.copy(alpha = 0.7f))
-                                        Text("Organiza: ${event.store}", color = colors.onSurface.copy(alpha = 0.7f))
-                                        if (event.region.isNotBlank()) Text("Región: ${event.region}", color = colors.onSurface.copy(alpha = 0.7f))
-                                        if (event.comuna.isNotBlank()) Text("Comuna: ${event.comuna}", color = colors.onSurface.copy(alpha = 0.7f))
-                                        if (event.address.isNotBlank()) Text("Dirección: ${event.address}", color = colors.onSurface.copy(alpha = 0.7f))
-                                        if (event.hasCapacity) {
+                                        Text(ev.title, fontSize = 18.sp, fontWeight = FontWeight.Bold, color = colors.primary)
+                                        Text("Categoría: ${'$'}{ev.category}", color = colors.onSurface.copy(alpha = 0.7f))
+                                        Text("Fecha: ${'$'}{ev.date}", color = colors.onSurface.copy(alpha = 0.7f))
+                                        Text("Organiza: ${'$'}{ev.store}", color = colors.onSurface.copy(alpha = 0.7f))
+                                        if (ev.region.isNotBlank()) Text("Región: ${'$'}{ev.region}", color = colors.onSurface.copy(alpha = 0.7f))
+                                        if (ev.comuna.isNotBlank()) Text("Comuna: ${'$'}{ev.comuna}", color = colors.onSurface.copy(alpha = 0.7f))
+                                        if (ev.address.isNotBlank()) Text("Dirección: ${'$'}{ev.address}", color = colors.onSurface.copy(alpha = 0.7f))
+                                        if (ev.hasCapacity) {
                                             Spacer(Modifier.height(4.dp))
-                                            Text("Cupos disponibles: ${event.capacityAvailable ?: 0}", color = Color(0xFF2E7D32))
+                                            Text("Cupos disponibles: ${'$'}{ev.capacityAvailable ?: 0}", color = Color(0xFF2E7D32))
                                         }
                                         Spacer(Modifier.height(6.dp))
-                                        Text(event.description, color = colors.onSurface)
+                                        Text(ev.description, color = colors.onSurface)
                                     }
                                 }
                             }
@@ -490,6 +500,29 @@ fun HomeScreen(
             },
             dismissButton = {
                 TextButton(onClick = { suggestRegion = null; suggestComuna = null }) { Text("Mantener actual") }
+            }
+        )
+    }
+
+    if (showNotices && notices.isNotEmpty()) {
+        AlertDialog(
+            onDismissRequest = { showNotices = false },
+            title = { Text("Actualizaciones de tus eventos") },
+            text = {
+                Column(Modifier.fillMaxWidth()) {
+                    notices.take(5).forEach { n ->
+                        Text("• ${n.eventTitle} (${n.store}): ${n.changes}")
+                        Spacer(Modifier.height(6.dp))
+                    }
+                    if (notices.size > 5) Text("… y ${notices.size - 5} más")
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    val ids = notices.map { it.id }
+                    scope.launch { vm.clearNotices(ids) }
+                    showNotices = false
+                }) { Text("Entendido") }
             }
         )
     }
